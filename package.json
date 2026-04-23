@@ -1,0 +1,16 @@
+{
+  "name": "macvm",
+  "private": true,
+  "workspaces": [
+    "apps/web-client",
+    "packages/protocol"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @macvm/protocol && npm run build --workspace @macvm/web-client",
+    "dev:web": "npm run dev --workspace @macvm/web-client",
+    "typecheck": "npm run typecheck --workspace @macvm/protocol && npm run typecheck --workspace @macvm/web-client"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
