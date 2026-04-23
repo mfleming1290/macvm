@@ -20,6 +20,34 @@ struct IceCandidate: Codable {
 struct CreateSessionRequest: Codable {
     let version: Int
     let offer: SessionDescription
+    let stream: StreamQualitySettings?
+}
+
+struct StreamQualitySettings: Codable, Equatable {
+    let maxBitrateBps: Int
+    let resolutionPreset: String
+
+    static let defaultSettings = StreamQualitySettings(
+        maxBitrateBps: 8_000_000,
+        resolutionPreset: "1080p"
+    )
+
+    var safeMaxBitrateBps: Int {
+        min(50_000_000, max(1_000_000, maxBitrateBps))
+    }
+
+    var maxLongEdge: Int? {
+        switch resolutionPreset {
+        case "native":
+            nil
+        case "1440p":
+            2_560
+        case "720p":
+            1_280
+        default:
+            1_920
+        }
+    }
 }
 
 struct CreateSessionResponse: Codable {

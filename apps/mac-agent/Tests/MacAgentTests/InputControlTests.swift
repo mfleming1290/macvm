@@ -55,7 +55,11 @@ final class InputControlTests: XCTestCase {
                 width: 2000,
                 height: 1000,
                 framesPerSecond: 30,
-                displayFrame: CGRect(x: 100, y: 200, width: 2000, height: 1000)
+                displayFrame: CGRect(x: 100, y: 200, width: 2000, height: 1000),
+                sourceDisplayWidth: 2000,
+                sourceDisplayHeight: 1000,
+                selectedStreamMaxLongEdge: 1920,
+                selectedBitrateBps: 8_000_000
             )
         )
 

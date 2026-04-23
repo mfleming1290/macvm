@@ -68,6 +68,18 @@ Browser-side diagnostics show:
 
 For the current LiveKitWebRTC answerer path, the Mac agent starts ScreenCaptureKit first, configures a screencast `RTCVideoSource`, binds the video track to the browser offer's negotiated video transceiver as `sendOnly`, then creates the answer. Avoid moving the video sender setup back to a separate pre-offer `addTrack` path unless you re-verify Safari/Chrome negotiation and decoded frame dimensions.
 
+## Browser Viewport Layout
+
+The web client root, body, and app shell are fixed to `100vw` by `100vh` with `overflow: hidden`. The connection panel, remote stage, and diagnostics are laid out inside that single viewport so the page itself never scrolls during a session.
+
+The browser uses an explicit contained-frame helper instead of relying on passive `<video>` layout side effects. Given the measured stage size and intrinsic stream size, it computes one floating frame with `scale = min(stageWidth / videoWidth, stageHeight / videoHeight)`, centers that frame in the stage, and renders the `<video>` to fill it exactly. Browser-side pointer mapping uses that same computed frame, so rendering, diagnostics, and absolute input coordinates stay aligned.
+
+## Video Quality Tuning
+
+The Mac agent keeps the same WebRTC sender path, but capture output is capped to a 1920-pixel long edge when the display is larger. The sender also sets a higher screen-stream bitrate target: 8 Mbps maximum, 1.5 Mbps minimum, high network priority, and maintain-resolution degradation preference.
+
+The intent is to reduce encoder pressure from very large Retina frames while giving motion more bitrate headroom. This should reduce smearing during fast desktop changes without introducing an alternate transport or buffering strategy. Browser bitrate changes are committed on release/blur instead of on every slider movement so the active session does not churn sender parameters continuously.
+
 ## Control Path Diagnostics
 
 The browser creates a `macvm-control` WebRTC DataChannel before creating the SDP offer. Pointer and keyboard events are normalized in `apps/web-client/src/input/` and sent through `AgentConnection.sendControlMessage`.
@@ -101,12 +113,16 @@ Manual verification requires a Mac with Screen Recording permission granted:
 4. Successful stream: start the web client with `npm run dev:web`, open it from another machine or browser profile, connect to `http://<mac-lan-ip>:8080`, and confirm live video appears.
 5. Frame-flow proof: while connected, confirm `/api/health` has increasing `captureFrames`, `completeFrames`, `capturerFrames`, and `sourceFrames`, with `senderAttached: true` and `senderTrackReadyState: "live"`.
 6. Browser decode proof: confirm the Media Diagnostics panel reports a live remote track and non-zero video element dimensions.
-7. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
-8. Input channel: confirm the browser diagnostics report control channel `open` after connection.
-9. Mouse input: move over the remote video, left click, right click, and scroll; confirm the Mac responds and `/api/health` shows increasing `control.receivedMessages` and `control.injectedEvents`.
-10. Keyboard input: focus a simple text field on the Mac through the remote session, type basic letters/numbers, press Enter/Escape/arrow keys, and verify a basic modifier shortcut such as Command+A.
-11. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
-12. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
-13. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
-14. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
-15. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.
+7. Viewport fit: confirm the full remote desktop is visible without page scrolling.
+8. Resize behavior: resize the browser and confirm the video remains centered, aspect-correct, and fully visible.
+9. Motion clarity: move windows quickly and confirm motion smearing is reduced compared with uncapped full-resolution capture.
+10. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
+11. Input channel: confirm the browser diagnostics report control channel `open` after connection.
+12. Mouse input: move over the remote video, left click, right click, and scroll; confirm the Mac responds and `/api/health` shows increasing `control.receivedMessages` and `control.injectedEvents`.
+13. Mapping accuracy: click near all four corners and the center of the visible remote desktop, including after resizing the browser, and confirm the Mac pointer lands accurately.
+14. Keyboard input: focus a simple text field on the Mac through the remote session, type basic letters/numbers, press Enter/Escape/arrow keys, and verify a basic modifier shortcut such as Command+A.
+15. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
+16. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
+17. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
+18. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
+19. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.

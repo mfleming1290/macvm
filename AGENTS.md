@@ -191,6 +191,8 @@ Rules:
 - do not use HLS, DASH, MJPEG, or generic HTTP video playback for the live stream
 - keep pipeline copies low where practical
 - surface useful diagnostics for permission, session, and negotiation failures
+- keep the browser remote surface viewport-bound with an explicit contained-frame calculation; coordinate mapping must use that computed rendered frame, not the window
+- cap oversized capture output and tune sender bitrate before considering larger streaming rewrites
 - avoid over-engineered adaptive bitrate before the base stream is reliable
 
 ## Testing and Verification

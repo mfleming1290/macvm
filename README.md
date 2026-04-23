@@ -101,7 +101,7 @@ For an active stream, `media` should show frame flow all the way through the sen
 }
 ```
 
-The browser also shows a small Media Diagnostics panel. A healthy stream shows a live remote track, decoded frames, and non-zero video dimensions.
+The browser also shows a small Media Diagnostics panel. A healthy stream shows a live remote track, decoded frames, and non-zero video dimensions. The web client constrains the remote video inside the viewport with `object-fit: contain`, so the full desktop should be visible without page scrolling.
 
 For input, `/api/health` should include `accessibilityAllowed: true` and a `control` object. During an active controlled session, `control.channelState` should become `open`, `receivedMessages` should increase as input is captured, and `injectedEvents` should increase when Accessibility permission allows injection.
 
@@ -115,3 +115,9 @@ For input, `/api/health` should include `accessibilityAllowed: true` and a `cont
 6. Browser receives the remote video track and renders the Mac display.
 7. Browser sends normalized input messages over the WebRTC DataChannel.
 8. Agent maps normalized coordinates to the captured display and injects input through CoreGraphics.
+
+## Viewport and Quality Notes
+
+The browser shell is fixed to `100vw` by `100vh` with page-level overflow hidden. Inside the center stage, the browser computes an explicit floating frame from the stage size and intrinsic stream size, then renders the video into that frame. That frame preserves aspect ratio, scales to the largest contained size, and is reused for pointer mapping diagnostics.
+
+The agent caps oversized capture output to a 1920-pixel long edge while preserving display aspect ratio, then sets the WebRTC sender to a higher-bitrate screen-stream profile. The browser bitrate slider now supports up to 50 Mbps, but changes are committed on release instead of being applied continuously during drag so interaction stays responsive.

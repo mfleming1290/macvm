@@ -7,6 +7,7 @@ import {
   HealthResponse,
   IceCandidatesResponse,
   PROTOCOL_VERSION,
+  StreamQualitySettings,
   isCreateSessionResponse,
   isErrorResponse,
   isHealthResponse,
@@ -39,6 +40,8 @@ export interface ConnectionDiagnostics {
   inboundFramesDecoded: number | null;
   inboundFrameWidth: number | null;
   inboundFrameHeight: number | null;
+  selectedBitrateBps: number | null;
+  selectedResolutionPreset: string | null;
 }
 
 export class AgentConnection {
@@ -50,12 +53,14 @@ export class AgentConnection {
   private isDisconnecting = false;
   private pendingLocalCandidates: RTCIceCandidate[] = [];
   private peer: RTCPeerConnection | undefined;
+  private streamSettings: StreamQualitySettings;
   private sessionId: string | undefined;
   private controlChannel: RTCDataChannel | undefined;
 
-  constructor(agentBaseUrl: string, events: AgentConnectionEvents) {
+  constructor(agentBaseUrl: string, events: AgentConnectionEvents, streamSettings: StreamQualitySettings) {
     this.agentBaseUrl = agentBaseUrl.replace(/\/$/, "");
     this.events = events;
+    this.streamSettings = streamSettings;
   }
 
   async connect(): Promise<void> {
@@ -127,6 +132,7 @@ export class AgentConnection {
             type: "offer",
             sdp: offer.sdp ?? "",
           },
+          stream: this.streamSettings,
         } satisfies CreateSessionRequest,
         isCreateSessionResponse,
       );
@@ -179,6 +185,17 @@ export class AgentConnection {
 
     this.controlChannel.send(JSON.stringify(message));
     return true;
+  }
+
+  updateStreamQuality(settings: StreamQualitySettings): boolean {
+    this.streamSettings = settings;
+    return this.sendControlMessage({
+      version: PROTOCOL_VERSION,
+      type: "stream.quality.update",
+      sequence: 0,
+      timestampMs: Date.now(),
+      settings,
+    });
   }
 
   private createControlChannel(peer: RTCPeerConnection): RTCDataChannel {
@@ -268,6 +285,8 @@ export class AgentConnection {
         inboundFramesDecoded: null,
         inboundFrameWidth: null,
         inboundFrameHeight: null,
+        selectedBitrateBps: null,
+        selectedResolutionPreset: null,
       });
       return;
     }
@@ -284,6 +303,8 @@ export class AgentConnection {
       inboundFramesDecoded: null,
       inboundFrameWidth: null,
       inboundFrameHeight: null,
+      selectedBitrateBps: this.streamSettings.maxBitrateBps,
+      selectedResolutionPreset: this.streamSettings.resolutionPreset,
     };
 
     if (videoReceiver) {

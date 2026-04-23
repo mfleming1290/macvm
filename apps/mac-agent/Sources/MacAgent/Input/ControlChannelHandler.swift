@@ -3,10 +3,15 @@ import LiveKitWebRTC
 
 final class ControlChannelHandler: NSObject {
     private let inputController: InputController
+    private let onStreamQualityUpdate: (StreamQualitySettings) -> Void
     private var dataChannel: LKRTCDataChannel?
 
-    init(inputController: InputController) {
+    init(
+        inputController: InputController,
+        onStreamQualityUpdate: @escaping (StreamQualitySettings) -> Void
+    ) {
         self.inputController = inputController
+        self.onStreamQualityUpdate = onStreamQualityUpdate
     }
 
     var diagnostics: ControlDiagnostics {
@@ -44,7 +49,11 @@ extension ControlChannelHandler: LKRTCDataChannelDelegate {
 
         do {
             let message = try ControlProtocol.decode(buffer.data)
-            inputController.handle(message)
+            if case .streamQuality(let message) = message {
+                onStreamQualityUpdate(message.settings)
+            } else {
+                inputController.handle(message)
+            }
         } catch {
             inputController.recordControlError("Failed to decode control message: \(error.localizedDescription)")
         }

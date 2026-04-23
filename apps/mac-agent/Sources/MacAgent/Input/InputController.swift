@@ -40,6 +40,8 @@ final class InputController {
             switch message {
             case .reset:
                 resetPressedState()
+            case .streamQuality:
+                break
             case .mouseMove(let message):
                 try requireAccessibility()
                 let point = mapper.map(x: message.x, y: message.y)

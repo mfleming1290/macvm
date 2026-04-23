@@ -70,12 +70,21 @@ struct InputResetControlMessage: Codable {
     let reason: String
 }
 
+struct StreamQualityControlMessage: Codable {
+    let version: Int
+    let type: String
+    let sequence: Int
+    let timestampMs: Double
+    let settings: StreamQualitySettings
+}
+
 enum ControlMessage {
     case mouseMove(MouseMoveControlMessage)
     case mouseButton(MouseButtonControlMessage)
     case mouseWheel(MouseWheelControlMessage)
     case keyboardKey(KeyboardKeyControlMessage)
     case reset(InputResetControlMessage)
+    case streamQuality(StreamQualityControlMessage)
 
     var type: String {
         switch self {
@@ -88,6 +97,8 @@ enum ControlMessage {
         case .keyboardKey(let message):
             message.type
         case .reset(let message):
+            message.type
+        case .streamQuality(let message):
             message.type
         }
     }
@@ -117,6 +128,10 @@ enum ControlProtocol {
             return .keyboardKey(try JSONDecoder().decode(KeyboardKeyControlMessage.self, from: data))
         case "input.reset":
             return .reset(try JSONDecoder().decode(InputResetControlMessage.self, from: data))
+        case "stream.quality.update":
+            let message = try JSONDecoder().decode(StreamQualityControlMessage.self, from: data)
+            try validateQuality(message.settings)
+            return .streamQuality(message)
         default:
             throw ControlProtocolError.unsupportedType(envelope.type)
         }
@@ -127,6 +142,12 @@ enum ControlProtocol {
             throw ControlProtocolError.invalidCoordinate
         }
     }
+
+    private static func validateQuality(_ settings: StreamQualitySettings) throws {
+        guard settings.maxBitrateBps >= 1_000_000, settings.maxBitrateBps <= 50_000_000 else {
+            throw ControlProtocolError.invalidQuality
+        }
+    }
 }
 
 private struct ControlEnvelope: Codable {
@@ -135,12 +156,15 @@ private struct ControlEnvelope: Codable {
 }
 
 enum ControlProtocolError: LocalizedError {
+    case invalidQuality
     case invalidCoordinate
     case unsupportedType(String)
     case unsupportedVersion
 
     var errorDescription: String? {
         switch self {
+        case .invalidQuality:
+            "Stream quality message is outside the supported bitrate range."
         case .invalidCoordinate:
             "Control message contains coordinates outside 0...1."
         case .unsupportedType(let type):

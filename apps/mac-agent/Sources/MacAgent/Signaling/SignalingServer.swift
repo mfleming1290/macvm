@@ -142,7 +142,10 @@ final class SignalingServer {
             guard payload.version == protocolVersion else {
                 throw AgentError.unsupportedProtocolVersion
             }
-            let response = try await sessionManager.createSession(from: payload.offer)
+            let response = try await sessionManager.createSession(
+                from: payload.offer,
+                streamSettings: payload.stream ?? .defaultSettings
+            )
             return .json(response)
         }
 

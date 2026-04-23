@@ -13,9 +13,15 @@ final class WebRTCSession: NSObject {
     private let stateLock = NSLock()
     private var iceConnectionState = "new"
     private var localCandidates: [IceCandidate] = []
+    private var selectedBitrateBps = StreamQualitySettings.defaultSettings.safeMaxBitrateBps
     private var sender: LKRTCRtpSender?
     private var signalingState = "new"
-    private lazy var controlChannelHandler = ControlChannelHandler(inputController: inputController)
+    private lazy var controlChannelHandler = ControlChannelHandler(
+        inputController: inputController,
+        onStreamQualityUpdate: { [weak self] settings in
+            self?.updateStreamQuality(settings)
+        }
+    )
 
     override init() {
         LKRTCInitializeSSL()
@@ -72,6 +78,7 @@ final class WebRTCSession: NSObject {
         diagnostics.senderAttached = sender != nil
         diagnostics.senderTrackEnabled = sender?.track?.isEnabled ?? false
         diagnostics.senderTrackReadyState = readyStateName(sender?.track?.readyState)
+        diagnostics.selectedBitrateBps = selectedBitrateBps
         return diagnostics
     }
 
@@ -82,9 +89,10 @@ final class WebRTCSession: NSObject {
     func createAnswer(for offer: SessionDescription, captureConfiguration: CaptureConfiguration) async throws -> SessionDescription {
         let remoteDescription = LKRTCSessionDescription(type: .offer, sdp: offer.sdp)
         try await setRemoteDescription(remoteDescription)
+        selectedBitrateBps = captureConfiguration.selectedBitrateBps
         inputController.update(captureConfiguration: captureConfiguration)
         configureVideoSource(captureConfiguration)
-        attachVideoTrackIfNeeded()
+        attachVideoTrackIfNeeded(captureConfiguration: captureConfiguration)
 
         let constraints = LKRTCMediaConstraints(
             mandatoryConstraints: nil,
@@ -133,8 +141,9 @@ final class WebRTCSession: NSObject {
         )
     }
 
-    private func attachVideoTrackIfNeeded() {
+    private func attachVideoTrackIfNeeded(captureConfiguration: CaptureConfiguration) {
         guard sender == nil else {
+            configureSenderEncoding(captureConfiguration: captureConfiguration)
             return
         }
 
@@ -147,6 +156,7 @@ final class WebRTCSession: NSObject {
                 print("macvm: failed to set video transceiver sendOnly: \(directionError.localizedDescription)")
             }
             sender = transceiver.sender
+            configureSenderEncoding(captureConfiguration: captureConfiguration)
             return
         }
 
@@ -154,6 +164,41 @@ final class WebRTCSession: NSObject {
         initOptions.direction = .sendOnly
         initOptions.streamIds = ["screen"]
         sender = peerConnection.addTransceiver(with: videoTrack, init: initOptions)?.sender
+        configureSenderEncoding(captureConfiguration: captureConfiguration)
+    }
+
+    private func configureSenderEncoding(captureConfiguration: CaptureConfiguration) {
+        applySenderEncoding(
+            bitrateBps: captureConfiguration.selectedBitrateBps,
+            framesPerSecond: captureConfiguration.framesPerSecond
+        )
+    }
+
+    private func updateStreamQuality(_ settings: StreamQualitySettings) {
+        selectedBitrateBps = settings.safeMaxBitrateBps
+        applySenderEncoding(bitrateBps: settings.safeMaxBitrateBps, framesPerSecond: 30)
+        print("macvm: updated stream bitrate to \(settings.safeMaxBitrateBps) bps")
+    }
+
+    private func applySenderEncoding(bitrateBps: Int, framesPerSecond: Int) {
+        guard let sender else {
+            return
+        }
+
+        selectedBitrateBps = bitrateBps
+        let parameters = sender.parameters
+        let encodings = parameters.encodings
+        if let encoding = encodings.first {
+            encoding.maxBitrateBps = NSNumber(value: bitrateBps)
+            encoding.minBitrateBps = NSNumber(value: min(1_500_000, bitrateBps))
+            encoding.maxFramerate = NSNumber(value: framesPerSecond)
+            encoding.scaleResolutionDownBy = NSNumber(value: 1.0)
+            encoding.bitratePriority = 2.0
+            encoding.networkPriority = .high
+            parameters.encodings = encodings
+        }
+        parameters.degradationPreference = NSNumber(value: LKRTCDegradationPreference.maintainResolution.rawValue)
+        sender.parameters = parameters
     }
 
     private func setRemoteDescription(_ description: LKRTCSessionDescription) async throws {

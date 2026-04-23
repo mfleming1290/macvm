@@ -36,6 +36,7 @@ export interface IceCandidateMessage {
 export interface CreateSessionRequest {
   version: typeof PROTOCOL_VERSION;
   offer: SessionDescriptionMessage;
+  stream?: StreamQualitySettings;
 }
 
 export interface CreateSessionResponse {
@@ -78,6 +79,10 @@ export interface MediaDiagnostics {
   lastFrameHeight: number | null;
   lastPixelFormat: string | null;
   lastTimestampNs: number | null;
+  sourceDisplayWidth: number | null;
+  sourceDisplayHeight: number | null;
+  selectedStreamMaxLongEdge: number | null;
+  selectedBitrateBps: number | null;
   senderAttached: boolean;
   senderTrackEnabled: boolean;
   senderTrackReadyState: string;
@@ -105,7 +110,15 @@ export type ControlMessageType =
   | "input.mouse.button"
   | "input.mouse.wheel"
   | "input.keyboard.key"
-  | "input.reset";
+  | "input.reset"
+  | "stream.quality.update";
+
+export type StreamResolutionPreset = "native" | "1440p" | "1080p" | "720p";
+
+export interface StreamQualitySettings {
+  maxBitrateBps: number;
+  resolutionPreset: StreamResolutionPreset;
+}
 
 export type MouseButton = "left" | "right";
 export type InputAction = "down" | "up";
@@ -162,12 +175,18 @@ export interface InputResetMessage extends ControlMessageBase {
   reason: "blur" | "disconnect" | "reconnect" | "visibilitychange" | "manual";
 }
 
+export interface StreamQualityUpdateMessage extends ControlMessageBase {
+  type: "stream.quality.update";
+  settings: StreamQualitySettings;
+}
+
 export type ControlMessage =
   | MouseMoveMessage
   | MouseButtonMessage
   | MouseWheelMessage
   | KeyboardKeyMessage
-  | InputResetMessage;
+  | InputResetMessage
+  | StreamQualityUpdateMessage;
 
 export interface ErrorResponse {
   version: typeof PROTOCOL_VERSION;
@@ -270,6 +289,8 @@ export function isControlMessage(value: unknown): value is ControlMessage {
         value.reason === "visibilitychange" ||
         value.reason === "manual"
       );
+    case "stream.quality.update":
+      return isStreamQualitySettings(value.settings);
   }
 }
 
@@ -294,6 +315,10 @@ function isMediaDiagnostics(value: unknown): value is MediaDiagnostics {
     (typeof value.lastFrameHeight === "number" || value.lastFrameHeight === null) &&
     (typeof value.lastPixelFormat === "string" || value.lastPixelFormat === null) &&
     (typeof value.lastTimestampNs === "number" || value.lastTimestampNs === null) &&
+    (typeof value.sourceDisplayWidth === "number" || value.sourceDisplayWidth === null) &&
+    (typeof value.sourceDisplayHeight === "number" || value.sourceDisplayHeight === null) &&
+    (typeof value.selectedStreamMaxLongEdge === "number" || value.selectedStreamMaxLongEdge === null) &&
+    (typeof value.selectedBitrateBps === "number" || value.selectedBitrateBps === null) &&
     typeof value.senderAttached === "boolean" &&
     typeof value.senderTrackEnabled === "boolean" &&
     typeof value.senderTrackReadyState === "string" &&
@@ -350,6 +375,19 @@ function isMouseButton(value: unknown): value is MouseButton {
 
 function isInputAction(value: unknown): value is InputAction {
   return value === "down" || value === "up";
+}
+
+function isStreamQualitySettings(value: unknown): value is StreamQualitySettings {
+  return (
+    isRecord(value) &&
+    typeof value.maxBitrateBps === "number" &&
+    value.maxBitrateBps >= 1_000_000 &&
+    value.maxBitrateBps <= 50_000_000 &&
+    (value.resolutionPreset === "native" ||
+      value.resolutionPreset === "1440p" ||
+      value.resolutionPreset === "1080p" ||
+      value.resolutionPreset === "720p")
+  );
 }
 
 function isMouseButtonArray(value: unknown): value is MouseButton[] {

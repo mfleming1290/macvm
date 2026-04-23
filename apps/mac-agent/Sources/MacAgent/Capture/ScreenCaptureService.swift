@@ -16,6 +16,9 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
     private var lastFrameWidth: Int?
     private var lastFrameHeight: Int?
     private var lastPixelFormat: String?
+    private var selectedStreamMaxLongEdge: Int?
+    private var sourceDisplayHeight: Int?
+    private var sourceDisplayWidth: Int?
     private var stream: SCStream?
     private var targetHeight = 0
     private var targetWidth = 0
@@ -31,16 +34,23 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         diagnostics.lastFrameWidth = lastFrameWidth
         diagnostics.lastFrameHeight = lastFrameHeight
         diagnostics.lastPixelFormat = lastPixelFormat
+        diagnostics.sourceDisplayWidth = sourceDisplayWidth
+        diagnostics.sourceDisplayHeight = sourceDisplayHeight
+        diagnostics.selectedStreamMaxLongEdge = selectedStreamMaxLongEdge
         return diagnostics
     }
 
-    func start() async throws -> CaptureConfiguration {
+    func start(streamSettings: StreamQualitySettings = .defaultSettings) async throws -> CaptureConfiguration {
         if stream != nil {
             return CaptureConfiguration(
                 width: targetWidth,
                 height: targetHeight,
                 framesPerSecond: 30,
-                displayFrame: currentDisplayFrame
+                displayFrame: currentDisplayFrame,
+                sourceDisplayWidth: sourceDisplayWidth ?? targetWidth,
+                sourceDisplayHeight: sourceDisplayHeight ?? targetHeight,
+                selectedStreamMaxLongEdge: selectedStreamMaxLongEdge,
+                selectedBitrateBps: streamSettings.safeMaxBitrateBps
             )
         }
 
@@ -57,8 +67,13 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let configuration = SCStreamConfiguration()
-        configuration.width = display.width
-        configuration.height = display.height
+        let captureSize = scaledCaptureSize(
+            width: display.width,
+            height: display.height,
+            maxLongEdge: streamSettings.maxLongEdge
+        )
+        configuration.width = captureSize.width
+        configuration.height = captureSize.height
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         configuration.showsCursor = true
@@ -67,15 +82,22 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         try nextStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: outputQueue)
         try await nextStream.startCapture()
         stream = nextStream
-        targetWidth = display.width
-        targetHeight = display.height
+        targetWidth = captureSize.width
+        targetHeight = captureSize.height
         currentDisplayFrame = CGDisplayBounds(CGDirectDisplayID(display.displayID))
+        sourceDisplayWidth = display.width
+        sourceDisplayHeight = display.height
+        selectedStreamMaxLongEdge = streamSettings.maxLongEdge
 
         return CaptureConfiguration(
-            width: display.width,
-            height: display.height,
+            width: captureSize.width,
+            height: captureSize.height,
             framesPerSecond: 30,
-            displayFrame: currentDisplayFrame
+            displayFrame: currentDisplayFrame,
+            sourceDisplayWidth: display.width,
+            sourceDisplayHeight: display.height,
+            selectedStreamMaxLongEdge: streamSettings.maxLongEdge,
+            selectedBitrateBps: streamSettings.safeMaxBitrateBps
         )
     }
 
@@ -157,7 +179,30 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         lastFrameWidth = nil
         lastFrameHeight = nil
         lastPixelFormat = nil
+        sourceDisplayWidth = nil
+        sourceDisplayHeight = nil
+        selectedStreamMaxLongEdge = nil
         diagnosticsLock.unlock()
+    }
+
+    private func scaledCaptureSize(width: Int, height: Int, maxLongEdge: Int?) -> (width: Int, height: Int) {
+        guard let maxLongEdge else {
+            return (width, height)
+        }
+
+        let longEdge = max(width, height)
+        guard longEdge > maxLongEdge else {
+            return (width, height)
+        }
+
+        let scale = Double(maxLongEdge) / Double(longEdge)
+        let scaledWidth = max(2, Int((Double(width) * scale).rounded()))
+        let scaledHeight = max(2, Int((Double(height) * scale).rounded()))
+        return (makeEven(scaledWidth), makeEven(scaledHeight))
+    }
+
+    private func makeEven(_ value: Int) -> Int {
+        value.isMultiple(of: 2) ? value : value + 1
     }
 
     private func pixelFormatName(_ pixelFormat: OSType) -> String {
@@ -181,6 +226,10 @@ struct CaptureConfiguration {
     let height: Int
     let framesPerSecond: Int
     let displayFrame: CGRect
+    let sourceDisplayWidth: Int
+    let sourceDisplayHeight: Int
+    let selectedStreamMaxLongEdge: Int?
+    let selectedBitrateBps: Int
 }
 
 enum CaptureError: LocalizedError {

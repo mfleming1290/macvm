@@ -10,6 +10,10 @@ struct MediaDiagnostics: Codable {
     var lastFrameHeight: Int?
     var lastPixelFormat: String?
     var lastTimestampNs: Int64?
+    var sourceDisplayWidth: Int?
+    var sourceDisplayHeight: Int?
+    var selectedStreamMaxLongEdge: Int?
+    var selectedBitrateBps: Int?
     var senderAttached: Bool
     var senderTrackEnabled: Bool
     var senderTrackReadyState: String
@@ -27,6 +31,10 @@ struct MediaDiagnostics: Codable {
         case lastFrameHeight
         case lastPixelFormat
         case lastTimestampNs
+        case sourceDisplayWidth
+        case sourceDisplayHeight
+        case selectedStreamMaxLongEdge
+        case selectedBitrateBps
         case senderAttached
         case senderTrackEnabled
         case senderTrackReadyState
@@ -45,6 +53,10 @@ struct MediaDiagnostics: Codable {
         lastFrameHeight: nil,
         lastPixelFormat: nil,
         lastTimestampNs: nil,
+        sourceDisplayWidth: nil,
+        sourceDisplayHeight: nil,
+        selectedStreamMaxLongEdge: nil,
+        selectedBitrateBps: nil,
         senderAttached: false,
         senderTrackEnabled: false,
         senderTrackReadyState: "none",
@@ -64,6 +76,10 @@ struct MediaDiagnostics: Codable {
         try container.encode(lastFrameHeight, forKey: .lastFrameHeight)
         try container.encode(lastPixelFormat, forKey: .lastPixelFormat)
         try container.encode(lastTimestampNs, forKey: .lastTimestampNs)
+        try container.encode(sourceDisplayWidth, forKey: .sourceDisplayWidth)
+        try container.encode(sourceDisplayHeight, forKey: .sourceDisplayHeight)
+        try container.encode(selectedStreamMaxLongEdge, forKey: .selectedStreamMaxLongEdge)
+        try container.encode(selectedBitrateBps, forKey: .selectedBitrateBps)
         try container.encode(senderAttached, forKey: .senderAttached)
         try container.encode(senderTrackEnabled, forKey: .senderTrackEnabled)
         try container.encode(senderTrackReadyState, forKey: .senderTrackReadyState)

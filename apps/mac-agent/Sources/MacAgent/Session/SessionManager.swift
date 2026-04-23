@@ -21,6 +21,7 @@ final class SessionManager {
             diagnostics.senderAttached = webRTCDiagnostics.senderAttached
             diagnostics.senderTrackEnabled = webRTCDiagnostics.senderTrackEnabled
             diagnostics.senderTrackReadyState = webRTCDiagnostics.senderTrackReadyState
+            diagnostics.selectedBitrateBps = webRTCDiagnostics.selectedBitrateBps
             diagnostics.localCandidates = webRTCDiagnostics.localCandidates
             diagnostics.signalingState = webRTCDiagnostics.signalingState
             diagnostics.iceConnectionState = webRTCDiagnostics.iceConnectionState
@@ -48,7 +49,10 @@ final class SessionManager {
         return "ok"
     }
 
-    func createSession(from offer: SessionDescription) async throws -> CreateSessionResponse {
+    func createSession(
+        from offer: SessionDescription,
+        streamSettings: StreamQualitySettings = .defaultSettings
+    ) async throws -> CreateSessionResponse {
         try validateProtocolDescription(offer)
         guard ScreenRecordingPermission.isGranted else {
             setFailureStatus("Permission missing", message: AgentError.permissionMissing.localizedDescription)
@@ -69,7 +73,9 @@ final class SessionManager {
         do {
             let captureConfiguration: CaptureConfiguration
             do {
-                captureConfiguration = try await captureService.start()
+                captureConfiguration = try await captureService.start(
+                    streamSettings: streamSettings
+                )
             } catch {
                 await closeActiveSession()
                 let message = error.localizedDescription

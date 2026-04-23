@@ -8,22 +8,24 @@ import {
   MouseWheelMessage,
   PROTOCOL_VERSION,
 } from "@macvm/protocol";
-import { normalizedVideoPoint } from "./videoCoordinates";
+import { ContainedFrame } from "../view/containedFrame";
+import { normalizedFramePoint } from "./videoCoordinates";
 
 type SendControlMessage = (message: ControlMessage) => void;
+type GetFrame = () => ContainedFrame;
 
 export class RemoteInputController {
   private readonly pressedButtons = new Set<MouseButton>();
   private readonly pressedKeys = new Set<string>();
+  private readonly getFrame: GetFrame;
   private readonly send: SendControlMessage;
   private readonly surface: HTMLElement;
-  private readonly video: HTMLVideoElement;
   private isActive = false;
   private sequence = 0;
 
-  constructor(surface: HTMLElement, video: HTMLVideoElement, send: SendControlMessage) {
+  constructor(surface: HTMLElement, getFrame: GetFrame, send: SendControlMessage) {
     this.surface = surface;
-    this.video = video;
+    this.getFrame = getFrame;
     this.send = send;
   }
 
@@ -67,7 +69,7 @@ export class RemoteInputController {
       return;
     }
 
-    const point = normalizedVideoPoint(this.video, event.clientX, event.clientY);
+    const point = normalizedFramePoint(this.surface, this.getFrame(), event.clientX, event.clientY);
     if (!point) {
       return;
     }
@@ -89,7 +91,7 @@ export class RemoteInputController {
   };
 
   private readonly handlePointerMove = (event: PointerEvent) => {
-    const point = normalizedVideoPoint(this.video, event.clientX, event.clientY);
+    const point = normalizedFramePoint(this.surface, this.getFrame(), event.clientX, event.clientY);
     if (!point) {
       return;
     }
@@ -110,7 +112,7 @@ export class RemoteInputController {
       return;
     }
 
-    const point = normalizedVideoPoint(this.video, event.clientX, event.clientY);
+    const point = normalizedFramePoint(this.surface, this.getFrame(), event.clientX, event.clientY);
     if (!point) {
       this.pressedButtons.delete(button);
       return;
@@ -134,7 +136,7 @@ export class RemoteInputController {
   };
 
   private readonly handleWheel = (event: WheelEvent) => {
-    const point = normalizedVideoPoint(this.video, event.clientX, event.clientY);
+    const point = normalizedFramePoint(this.surface, this.getFrame(), event.clientX, event.clientY);
     if (!point) {
       return;
     }

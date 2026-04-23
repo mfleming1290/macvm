@@ -1,15 +1,26 @@
+import { ContainedFrame } from "../view/containedFrame";
+
 export interface NormalizedPoint {
   x: number;
   y: number;
 }
 
-export function normalizedVideoPoint(
-  video: HTMLVideoElement,
+export interface VideoContentRect {
+  element: DOMRect;
+  content: ContainedFrame;
+}
+
+export function normalizedFramePoint(
+  surface: HTMLElement,
+  frame: ContainedFrame,
   clientX: number,
   clientY: number,
 ): NormalizedPoint | null {
-  const bounds = video.getBoundingClientRect();
-  const content = videoContentRect(video);
+  const { element: bounds, content } = displayedFrameRect(surface, frame);
+
+  if (content.width <= 0 || content.height <= 0) {
+    return null;
+  }
 
   const x = clientX - bounds.left - content.x;
   const y = clientY - bounds.top - content.y;
@@ -24,29 +35,10 @@ export function normalizedVideoPoint(
   };
 }
 
-function videoContentRect(video: HTMLVideoElement) {
-  const bounds = video.getBoundingClientRect();
-  const videoWidth = video.videoWidth || bounds.width;
-  const videoHeight = video.videoHeight || bounds.height;
-  const elementRatio = bounds.width / bounds.height;
-  const videoRatio = videoWidth / videoHeight;
-
-  if (elementRatio > videoRatio) {
-    const width = bounds.height * videoRatio;
-    return {
-      x: (bounds.width - width) / 2,
-      y: 0,
-      width,
-      height: bounds.height,
-    };
-  }
-
-  const height = bounds.width / videoRatio;
+export function displayedFrameRect(surface: HTMLElement, frame: ContainedFrame): VideoContentRect {
   return {
-    x: 0,
-    y: (bounds.height - height) / 2,
-    width: bounds.width,
-    height,
+    element: surface.getBoundingClientRect(),
+    content: frame,
   };
 }
 

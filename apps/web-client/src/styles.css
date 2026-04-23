@@ -6,6 +6,15 @@
   text-rendering: optimizeLegibility;
 }
 
+html,
+body,
+#root {
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -13,20 +22,24 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
 .app-shell {
   display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 100vh;
-  padding: 24px;
-  gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
   background:
     radial-gradient(circle at top left, rgb(218 176 91 / 24%), transparent 36rem),
     linear-gradient(135deg, #15120e 0%, #211b15 55%, #101010 100%);
@@ -36,6 +49,8 @@ input {
   display: grid;
   grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 2fr) auto;
   align-items: end;
+  min-width: 0;
+  min-height: 0;
   gap: 20px;
   padding: 18px;
   border: 1px solid rgb(255 255 255 / 12%);
@@ -90,6 +105,16 @@ input:focus {
   box-shadow: 0 0 0 3px rgb(215 169 79 / 18%);
 }
 
+select {
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #fdf8ef;
+  background: rgb(255 255 255 / 10%);
+  outline: none;
+}
+
 button {
   border: 0;
   border-radius: 14px;
@@ -119,6 +144,23 @@ button.secondary {
   background: rgb(255 255 255 / 9%);
 }
 
+.stream-controls {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto minmax(90px, auto);
+  gap: 8px 10px;
+  align-items: center;
+  color: #bdb4a6;
+  font-size: 0.82rem;
+}
+
+.stream-controls input[type="range"] {
+  padding: 0;
+}
+
+.stream-controls strong {
+  color: #f4f1ea;
+}
+
 .status-connected {
   color: #c9ffd6;
 }
@@ -134,11 +176,13 @@ button.secondary {
 }
 
 .remote-stage {
-  display: grid;
+  position: relative;
+  min-width: 0;
   min-height: 0;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 28px;
+  height: 100%;
   overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 24px;
   background:
     linear-gradient(45deg, rgb(255 255 255 / 4%) 25%, transparent 25%),
     linear-gradient(-45deg, rgb(255 255 255 / 4%) 25%, transparent 25%),
@@ -147,9 +191,18 @@ button.secondary {
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 3%), 0 24px 90px rgb(0 0 0 / 36%);
 }
 
+.remote-frame {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #050505;
+}
+
 .debug-panel {
   display: grid;
   gap: 10px;
+  min-width: 0;
+  min-height: 0;
   padding: 14px 16px;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 18px;
@@ -179,19 +232,16 @@ button.secondary {
 }
 
 video {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 58vh;
-  object-fit: contain;
+  object-fit: fill;
   background: #050505;
 }
 
 @media (max-width: 900px) {
-  .app-shell {
-    padding: 14px;
-  }
-
   .connection-panel,
+  .stream-controls,
   .form-row,
   .debug-grid {
     grid-template-columns: 1fr;
