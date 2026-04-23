@@ -42,6 +42,8 @@ final class InputController {
                 resetPressedState()
             case .streamQuality:
                 break
+            case .clipboardSet, .clipboardGet, .clipboardValue, .clipboardError:
+                break
             case .mouseMove(let message):
                 try requireAccessibility()
                 let point = mapper.map(x: message.x, y: message.y)
@@ -92,6 +94,35 @@ final class InputController {
 
     func recordControlError(_ message: String) {
         recordError(message)
+    }
+
+    func recordClipboardRead(textLength: Int, type: String = "clipboard.get") {
+        updateDiagnostics { diagnostics in
+            diagnostics.receivedMessages += 1
+            diagnostics.clipboardReads += 1
+            diagnostics.lastMessageType = type
+            diagnostics.lastClipboardTextLength = textLength
+            diagnostics.lastError = nil
+        }
+    }
+
+    func recordClipboardWrite(textLength: Int, type: String = "clipboard.set") {
+        updateDiagnostics { diagnostics in
+            diagnostics.receivedMessages += 1
+            diagnostics.clipboardWrites += 1
+            diagnostics.lastMessageType = type
+            diagnostics.lastClipboardTextLength = textLength
+            diagnostics.lastError = nil
+        }
+    }
+
+    func recordClipboardFailure(type: String, message: String) {
+        print("macvm clipboard: \(message)")
+        updateDiagnostics { diagnostics in
+            diagnostics.receivedMessages += 1
+            diagnostics.lastMessageType = type
+            diagnostics.lastError = message
+        }
     }
 
     private func recordInjected(point: CGPoint? = nil, eventCount: Int = 1) {

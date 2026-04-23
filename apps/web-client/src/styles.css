@@ -26,6 +26,7 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -100,7 +101,23 @@ input {
   outline: none;
 }
 
+textarea {
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #fdf8ef;
+  background: rgb(255 255 255 / 7%);
+  outline: none;
+  resize: vertical;
+}
+
 input:focus {
+  border-color: #d7a94f;
+  box-shadow: 0 0 0 3px rgb(215 169 79 / 18%);
+}
+
+textarea:focus {
   border-color: #d7a94f;
   box-shadow: 0 0 0 3px rgb(215 169 79 / 18%);
 }
@@ -175,6 +192,63 @@ button.secondary {
   color: #ffd0c9;
 }
 
+.clipboard-panel {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.clipboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.clipboard-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #bdb4a6;
+  font-size: 0.82rem;
+}
+
+.clipboard-toggle input {
+  width: auto;
+}
+
+.clipboard-grid {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  gap: 10px 12px;
+  align-items: start;
+}
+
+.clipboard-grid label {
+  color: #bdb4a6;
+  font-size: 0.82rem;
+  padding-top: 10px;
+}
+
+.clipboard-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.clipboard-actions button {
+  min-width: 150px;
+}
+
+.clipboard-status {
+  margin: 0;
+  color: #bdb4a6;
+  font-size: 0.82rem;
+}
+
 .remote-stage {
   position: relative;
   min-width: 0;
@@ -242,6 +316,7 @@ video {
 @media (max-width: 900px) {
   .connection-panel,
   .stream-controls,
+  .clipboard-grid,
   .form-row,
   .debug-grid {
     grid-template-columns: 1fr;

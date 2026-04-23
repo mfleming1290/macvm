@@ -132,7 +132,23 @@ Agent-side `/api/health` includes:
 - `control.receivedMessages`: decoded control messages received.
 - `control.injectedEvents`: CoreGraphics events posted successfully.
 - `control.resetCount`: explicit input cleanup/reset events.
+- `control.clipboardReads`: successful plain-text clipboard reads from `NSPasteboard`.
+- `control.clipboardWrites`: successful plain-text clipboard writes to `NSPasteboard`.
+- `control.lastClipboardTextLength`: latest clipboard text length processed by the agent.
 - `control.lastError`: permission, mapping, decode, or injection error details.
+
+## Clipboard
+
+Clipboard is explicit and text-only in this MVP. The browser uses the existing `macvm-control` WebRTC DataChannel for:
+
+- `clipboard.set`: browser sends text to the Mac clipboard
+- `clipboard.get`: browser asks the Mac for its current plain-text clipboard value
+- `clipboard.value`: agent returns plain-text clipboard contents
+- `clipboard.error`: agent returns empty/non-text/read/write failures
+
+The Mac side uses `NSPasteboard.general` and only reads/writes plain text. Empty clipboard and non-text clipboard contents return explicit clipboard errors instead of pretending a string is available.
+
+The browser UI exposes manual send/fetch actions plus an opt-in auto-sync toggle. Auto-sync is disabled by default and remains best-effort because browser clipboard permissions vary by browser, page focus, and secure-context rules.
 
 ## Verification
 
@@ -163,8 +179,12 @@ Manual verification requires a Mac with Screen Recording permission granted:
 15. Mouse input: move over the remote video, left click, right click, and scroll; confirm the Mac responds and `/api/health` shows increasing `control.receivedMessages` and `control.injectedEvents`.
 16. Mapping accuracy: click near all four corners and the center of the visible remote desktop, including after resizing the browser, and confirm the Mac pointer lands accurately.
 17. Keyboard input: focus a simple text field on the Mac through the remote session, type basic letters/numbers, press Enter/Escape/arrow keys, and verify a basic modifier shortcut such as Command+A.
-18. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
-19. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
-20. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
-21. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
-22. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.
+18. Clipboard send: type text into the browser clipboard panel, click **Send To Mac**, then paste on the Mac and confirm the text matches.
+19. Clipboard fetch: copy plain text on the Mac, click **Fetch Mac Clipboard**, and confirm the fetched text appears in the browser panel.
+20. Clipboard copy-back: click **Copy To Browser** and confirm the browser clipboard now contains the fetched Mac text when browser permissions allow it.
+21. Empty/non-text clipboard: clear the Mac clipboard or copy non-text content, fetch again, and confirm the browser shows a clear clipboard error instead of stale text.
+22. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
+23. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
+24. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
+25. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
+26. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.

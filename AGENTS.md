@@ -42,12 +42,14 @@ The first working version proves the media and input stack:
 - browser rendering with a `<video>` element
 - minimal HTTP signaling for offer, answer, and ICE candidates
 - WebRTC DataChannel input control bound to the active peer connection
+- explicit text-only clipboard set/get over the existing WebRTC DataChannel
 - mouse movement, left/right button, wheel, keyboard key down/up, and basic modifiers
 - normalized browser coordinate mapping into the captured display
 - one active viewer session
 - explicit Screen Recording and Accessibility permission handling
 
 Input control is intentionally MVP-focused. File transfer, clipboard sync, multi-viewer control, and exhaustive keyboard-layout/IME support remain out of scope.
+Input and clipboard support are intentionally MVP-focused. Text clipboard set/get is supported, but file transfer, rich clipboard formats, multi-viewer control, and exhaustive keyboard-layout/IME support remain out of scope.
 
 Out of scope for the current MVP:
 
@@ -111,6 +113,7 @@ The stack currently has four active planes:
 - Network.framework for the minimal local HTTP signaling server
 - centralized Screen Recording and Accessibility permission checks
 - CoreGraphics event injection for mouse, wheel, and keyboard input
+- NSPasteboard plain-text clipboard read/write
 
 ### Web Client
 

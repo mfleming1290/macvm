@@ -104,6 +104,12 @@ private struct DiagnosticsView: View {
                 Text("\(controlDiagnostics.pressedButtons) buttons, \(controlDiagnostics.pressedKeys) keys, error \(controlDiagnostics.lastError ?? "none")")
                     .foregroundStyle(.secondary)
             }
+            GridRow {
+                Text("Clipboard")
+                    .fontWeight(.semibold)
+                Text("\(controlDiagnostics.clipboardWrites) writes, \(controlDiagnostics.clipboardReads) reads, last \(controlDiagnostics.lastClipboardTextLength ?? 0) chars")
+                    .foregroundStyle(.secondary)
+            }
         }
         .font(.caption.monospacedDigit())
         .padding(12)

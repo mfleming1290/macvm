@@ -9,6 +9,7 @@ It includes:
 - a LiveKitWebRTC peer in the agent that publishes the captured screen as video
 - a Vite React web client that connects with browser-native WebRTC and renders the stream in a `<video>` element
 - a WebRTC DataChannel control path for mouse, wheel, and keyboard input
+- explicit text-only clipboard set/get over the existing WebRTC DataChannel
 
 ## Project Structure
 
@@ -84,6 +85,15 @@ http://<mac-lan-ip>:8080
 
 Click **Connect**. The browser creates a WebRTC offer, opens a `macvm-control` DataChannel, sends the offer to the agent, receives an answer, exchanges ICE candidates through the agent's minimal HTTP endpoints, and renders the Mac screen in the video element. Once the control channel reports `open`, pointer, wheel, and keyboard events over the remote video surface are sent as normalized protocol messages and injected by the Mac agent.
 
+Clipboard is explicit and text-only in this MVP. The browser UI can:
+
+- send text from the browser UI or browser clipboard to the Mac clipboard
+- fetch the current Mac clipboard text into the browser UI
+- copy fetched Mac clipboard text into the browser clipboard when the browser Clipboard API allows it
+- optionally enable best-effort automatic bidirectional text sync
+
+Automatic clipboard sync is off by default. Browser clipboard access may fail on insecure origins or in browsers that require a user gesture; the UI surfaces those failures instead of assuming clipboard access always works.
+
 This MVP is local-network development infrastructure. Do not expose it to the public internet.
 
 ## Verify
@@ -137,6 +147,7 @@ For input, `/api/health` should include `accessibilityAllowed: true` and a `cont
 6. Browser receives the remote video track and renders the Mac display.
 7. Browser sends normalized input messages over the WebRTC DataChannel.
 8. Agent maps normalized coordinates to the captured display and injects input through CoreGraphics.
+9. Browser and agent exchange explicit text clipboard messages over the same DataChannel when the user triggers clipboard actions.
 
 ## Viewport and Quality Notes
 

@@ -78,6 +78,44 @@ struct StreamQualityControlMessage: Codable {
     let settings: StreamQualitySettings
 }
 
+struct ClipboardSetControlMessage: Codable {
+    let version: Int
+    let type: String
+    let sequence: Int
+    let timestampMs: Double
+    let source: String
+    let text: String
+}
+
+struct ClipboardGetControlMessage: Codable {
+    let version: Int
+    let type: String
+    let sequence: Int
+    let timestampMs: Double
+    let source: String
+}
+
+struct ClipboardValueControlMessage: Codable {
+    let version: Int
+    let type: String
+    let sequence: Int
+    let timestampMs: Double
+    let source: String
+    let replyToSequence: Int?
+    let text: String
+}
+
+struct ClipboardErrorControlMessage: Codable {
+    let version: Int
+    let type: String
+    let sequence: Int
+    let timestampMs: Double
+    let source: String
+    let replyToSequence: Int?
+    let code: String
+    let message: String
+}
+
 enum ControlMessage {
     case mouseMove(MouseMoveControlMessage)
     case mouseButton(MouseButtonControlMessage)
@@ -85,6 +123,10 @@ enum ControlMessage {
     case keyboardKey(KeyboardKeyControlMessage)
     case reset(InputResetControlMessage)
     case streamQuality(StreamQualityControlMessage)
+    case clipboardSet(ClipboardSetControlMessage)
+    case clipboardGet(ClipboardGetControlMessage)
+    case clipboardValue(ClipboardValueControlMessage)
+    case clipboardError(ClipboardErrorControlMessage)
 
     var type: String {
         switch self {
@@ -99,6 +141,14 @@ enum ControlMessage {
         case .reset(let message):
             message.type
         case .streamQuality(let message):
+            message.type
+        case .clipboardSet(let message):
+            message.type
+        case .clipboardGet(let message):
+            message.type
+        case .clipboardValue(let message):
+            message.type
+        case .clipboardError(let message):
             message.type
         }
     }
@@ -132,6 +182,14 @@ enum ControlProtocol {
             let message = try JSONDecoder().decode(StreamQualityControlMessage.self, from: data)
             try validateQuality(message.settings)
             return .streamQuality(message)
+        case "clipboard.set":
+            return .clipboardSet(try JSONDecoder().decode(ClipboardSetControlMessage.self, from: data))
+        case "clipboard.get":
+            return .clipboardGet(try JSONDecoder().decode(ClipboardGetControlMessage.self, from: data))
+        case "clipboard.value":
+            return .clipboardValue(try JSONDecoder().decode(ClipboardValueControlMessage.self, from: data))
+        case "clipboard.error":
+            return .clipboardError(try JSONDecoder().decode(ClipboardErrorControlMessage.self, from: data))
         default:
             throw ControlProtocolError.unsupportedType(envelope.type)
         }

@@ -68,4 +68,25 @@ final class InputControlTests: XCTestCase {
         XCTAssertEqual(point.x, 600)
         XCTAssertEqual(point.y, 950)
     }
+
+    func testControlProtocolDecodesClipboardGetMessage() throws {
+        let data = Data(
+            """
+            {
+              "version": 1,
+              "type": "clipboard.get",
+              "sequence": 7,
+              "timestampMs": 1234,
+              "source": "browser"
+            }
+            """.utf8
+        )
+
+        guard case .clipboardGet(let message) = try ControlProtocol.decode(data) else {
+            return XCTFail("Expected a clipboard get message.")
+        }
+
+        XCTAssertEqual(message.sequence, 7)
+        XCTAssertEqual(message.source, "browser")
+    }
 }

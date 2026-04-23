@@ -6,6 +6,9 @@ struct ControlDiagnostics: Codable {
     var receivedMessages: Int
     var injectedEvents: Int
     var resetCount: Int
+    var clipboardReads: Int
+    var clipboardWrites: Int
+    var lastClipboardTextLength: Int?
     var pressedKeys: Int
     var pressedButtons: Int
     var lastMessageType: String?
@@ -19,6 +22,9 @@ struct ControlDiagnostics: Codable {
         case receivedMessages
         case injectedEvents
         case resetCount
+        case clipboardReads
+        case clipboardWrites
+        case lastClipboardTextLength
         case pressedKeys
         case pressedButtons
         case lastMessageType
@@ -33,6 +39,9 @@ struct ControlDiagnostics: Codable {
         receivedMessages: 0,
         injectedEvents: 0,
         resetCount: 0,
+        clipboardReads: 0,
+        clipboardWrites: 0,
+        lastClipboardTextLength: nil,
         pressedKeys: 0,
         pressedButtons: 0,
         lastMessageType: nil,
@@ -48,6 +57,9 @@ struct ControlDiagnostics: Codable {
         try container.encode(receivedMessages, forKey: .receivedMessages)
         try container.encode(injectedEvents, forKey: .injectedEvents)
         try container.encode(resetCount, forKey: .resetCount)
+        try container.encode(clipboardReads, forKey: .clipboardReads)
+        try container.encode(clipboardWrites, forKey: .clipboardWrites)
+        try container.encode(lastClipboardTextLength, forKey: .lastClipboardTextLength)
         try container.encode(pressedKeys, forKey: .pressedKeys)
         try container.encode(pressedButtons, forKey: .pressedButtons)
         try container.encode(lastMessageType, forKey: .lastMessageType)

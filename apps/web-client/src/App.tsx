@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { StreamQualitySettings, StreamResolutionPreset } from "@macvm/protocol";
+import { ClipboardErrorMessage, ClipboardValueMessage, StreamQualitySettings, StreamResolutionPreset } from "@macvm/protocol";
+import { readBrowserClipboardText, writeBrowserClipboardText } from "./clipboard/browserClipboard";
 import { RemoteInputController } from "./input/RemoteInputController";
 import { displayedFrameRect } from "./input/videoCoordinates";
 import { computeContainedFrame, type ContainedFrame } from "./view/containedFrame";
@@ -68,10 +69,20 @@ export default function App() {
   const [streamSettings, setStreamSettings] = useState<StreamQualitySettings>(defaultStreamSettings);
   const [pendingBitrateMbps, setPendingBitrateMbps] = useState(defaultStreamSettings.maxBitrateBps / 1_000_000);
   const [videoDiagnostics, setVideoDiagnostics] = useState<VideoDiagnostics>(emptyVideoDiagnostics);
+  const [clipboardDraft, setClipboardDraft] = useState("");
+  const [clipboardAutoSync, setClipboardAutoSync] = useState(false);
+  const [clipboardStatus, setClipboardStatus] = useState("Clipboard idle.");
+  const [remoteClipboardText, setRemoteClipboardText] = useState("");
+  const autoSyncErrorRef = useRef<string | null>(null);
+  const clipboardAutoSyncRef = useRef(false);
+  const clipboardAutoSyncTimerRef = useRef<number | null>(null);
+  const clipboardPollBusyRef = useRef(false);
   const connectionRef = useRef<AgentConnection | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const frameStateRef = useRef<ContainedFrame>({ x: 0, y: 0, width: 0, height: 0, scale: 0 });
   const inputControllerRef = useRef<RemoteInputController | null>(null);
+  const lastBrowserClipboardSnapshotRef = useRef("");
+  const lastMacClipboardTextRef = useRef("");
   const stageRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastSentStreamSettingsRef = useRef("");
@@ -126,6 +137,49 @@ export default function App() {
     setPendingBitrateMbps(streamSettings.maxBitrateBps / 1_000_000);
   }, [streamSettings.maxBitrateBps]);
 
+  useEffect(() => {
+    clipboardAutoSyncRef.current = clipboardAutoSync;
+  }, [clipboardAutoSync]);
+
+  useEffect(() => {
+    if (!clipboardAutoSync || connectionState !== "connected") {
+      if (clipboardAutoSyncTimerRef.current !== null) {
+        window.clearInterval(clipboardAutoSyncTimerRef.current);
+        clipboardAutoSyncTimerRef.current = null;
+      }
+      return;
+    }
+
+    const tick = async () => {
+      if (clipboardPollBusyRef.current) {
+        return;
+      }
+
+      clipboardPollBusyRef.current = true;
+      try {
+        await syncBrowserClipboardToMac(true);
+        const requested = connectionRef.current?.requestAgentClipboard() ?? false;
+        if (!requested) {
+          setClipboardStatus("Clipboard sync is waiting for the control channel to open.");
+        }
+      } finally {
+        clipboardPollBusyRef.current = false;
+      }
+    };
+
+    void tick();
+    clipboardAutoSyncTimerRef.current = window.setInterval(() => {
+      void tick();
+    }, 2500);
+
+    return () => {
+      if (clipboardAutoSyncTimerRef.current !== null) {
+        window.clearInterval(clipboardAutoSyncTimerRef.current);
+        clipboardAutoSyncTimerRef.current = null;
+      }
+    };
+  }, [clipboardAutoSync, connectionState]);
+
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -139,27 +193,30 @@ export default function App() {
     const connection = new AgentConnection(
       agentUrl,
       {
+        onClipboardMessage: (message) => {
+          void handleClipboardMessage(message);
+        },
         onDiagnostics: (diagnostics) => {
-        if (diagnostics.controlChannelState === "open") {
-          warnedControlNotReadyRef.current = false;
-          sendStreamQuality(connection, streamSettings);
-        }
-        setConnectionDiagnostics(diagnostics);
-      },
-      onError: setError,
-      onRemoteStream: async (stream) => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          try {
-            await videoRef.current.play();
-          } catch (playError) {
-            setVideoDiagnostics((current) => ({
-              ...current,
-              playbackError: playError instanceof Error ? playError.message : String(playError),
-            }));
+          if (diagnostics.controlChannelState === "open") {
+            warnedControlNotReadyRef.current = false;
+            sendStreamQuality(connection, streamSettings);
           }
-        }
-      },
+          setConnectionDiagnostics(diagnostics);
+        },
+        onError: setError,
+        onRemoteStream: async (stream) => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            try {
+              await videoRef.current.play();
+            } catch (playError) {
+              setVideoDiagnostics((current) => ({
+                ...current,
+                playbackError: playError instanceof Error ? playError.message : String(playError),
+              }));
+            }
+          }
+        },
         onStateChange: setConnectionState,
       },
       streamSettings,
@@ -203,6 +260,49 @@ export default function App() {
     }
     setConnectionDiagnostics(emptyConnectionDiagnostics);
     setVideoDiagnostics(emptyVideoDiagnostics);
+    setClipboardStatus("Clipboard idle.");
+  }
+
+  async function readBrowserClipboardIntoDraft() {
+    try {
+      const text = await readBrowserClipboardText();
+      lastBrowserClipboardSnapshotRef.current = text;
+      setClipboardDraft(text);
+      setClipboardStatus(`Loaded ${text.length} chars from the browser clipboard.`);
+      autoSyncErrorRef.current = null;
+    } catch (nextError) {
+      setClipboardStatus(nextError instanceof Error ? nextError.message : String(nextError));
+    }
+  }
+
+  async function sendDraftToMacClipboard() {
+    if (!connectionRef.current?.setAgentClipboard(clipboardDraft)) {
+      setClipboardStatus("Clipboard send failed because the control channel is not open yet.");
+      return;
+    }
+
+    lastBrowserClipboardSnapshotRef.current = clipboardDraft;
+    setClipboardStatus(`Sent ${clipboardDraft.length} chars to the Mac clipboard.`);
+  }
+
+  async function fetchMacClipboard() {
+    if (!connectionRef.current?.requestAgentClipboard()) {
+      setClipboardStatus("Clipboard fetch failed because the control channel is not open yet.");
+      return;
+    }
+
+    setClipboardStatus("Requested the current Mac clipboard text.");
+  }
+
+  async function copyFetchedTextToBrowser() {
+    try {
+      await writeBrowserClipboardText(remoteClipboardText);
+      lastBrowserClipboardSnapshotRef.current = remoteClipboardText;
+      setClipboardStatus(`Copied ${remoteClipboardText.length} chars into the browser clipboard.`);
+      autoSyncErrorRef.current = null;
+    } catch (nextError) {
+      setClipboardStatus(nextError instanceof Error ? nextError.message : String(nextError));
+    }
   }
 
   function commitBitrate(nextBitrateMbps: number) {
@@ -245,6 +345,59 @@ export default function App() {
 
     if (connection?.updateStreamQuality(settings)) {
       lastSentStreamSettingsRef.current = settingsKey;
+    }
+  }
+
+  async function syncBrowserClipboardToMac(automatic: boolean) {
+    try {
+      const text = await readBrowserClipboardText();
+      autoSyncErrorRef.current = null;
+      if (text === lastBrowserClipboardSnapshotRef.current || text === lastMacClipboardTextRef.current) {
+        lastBrowserClipboardSnapshotRef.current = text;
+        return;
+      }
+
+      lastBrowserClipboardSnapshotRef.current = text;
+      setClipboardDraft(text);
+      if (connectionRef.current?.setAgentClipboard(text)) {
+        setClipboardStatus(
+          automatic ? `Auto-synced ${text.length} chars from the browser clipboard to the Mac.` : `Sent ${text.length} chars to the Mac clipboard.`,
+        );
+      } else if (!automatic) {
+        setClipboardStatus("Clipboard send failed because the control channel is not open yet.");
+      }
+    } catch (nextError) {
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      if (!automatic || autoSyncErrorRef.current !== message) {
+        setClipboardStatus(message);
+      }
+      autoSyncErrorRef.current = message;
+    }
+  }
+
+  async function handleClipboardMessage(message: ClipboardValueMessage | ClipboardErrorMessage) {
+    if (message.type === "clipboard.error") {
+      setClipboardStatus(`Mac clipboard ${message.code}: ${message.message}`);
+      return;
+    }
+
+    lastMacClipboardTextRef.current = message.text;
+    setRemoteClipboardText(message.text);
+    setClipboardStatus(`Fetched ${message.text.length} chars from the Mac clipboard.`);
+
+    if (!clipboardAutoSyncRef.current || message.text === lastBrowserClipboardSnapshotRef.current) {
+      return;
+    }
+
+    try {
+      await writeBrowserClipboardText(message.text);
+      lastBrowserClipboardSnapshotRef.current = message.text;
+      setClipboardStatus(`Auto-synced ${message.text.length} chars from the Mac clipboard to the browser.`);
+      autoSyncErrorRef.current = null;
+    } catch (nextError) {
+      const errorMessage = nextError instanceof Error ? nextError.message : String(nextError);
+      setClipboardStatus(errorMessage);
+      autoSyncErrorRef.current = errorMessage;
     }
   }
 
@@ -308,6 +461,54 @@ export default function App() {
             <option value="720p">720p</option>
           </select>
         </div>
+        <section className="clipboard-panel" aria-label="Clipboard controls">
+          <div className="clipboard-header">
+            <strong>Clipboard</strong>
+            <label className="clipboard-toggle">
+              <input
+                type="checkbox"
+                checked={clipboardAutoSync}
+                onChange={(event) => setClipboardAutoSync(event.target.checked)}
+              />
+              Auto sync
+            </label>
+          </div>
+          <div className="clipboard-grid">
+            <label htmlFor="clipboard-draft">Browser to Mac</label>
+            <textarea
+              id="clipboard-draft"
+              value={clipboardDraft}
+              onChange={(event) => setClipboardDraft(event.target.value)}
+              placeholder="Type or paste text here before sending it to the Mac clipboard."
+              rows={3}
+            />
+            <div className="clipboard-actions">
+              <button type="button" className="secondary" onClick={readBrowserClipboardIntoDraft}>
+                Read Browser Clipboard
+              </button>
+              <button type="button" onClick={() => void sendDraftToMacClipboard()}>
+                Send To Mac
+              </button>
+            </div>
+            <label htmlFor="remote-clipboard">Mac to Browser</label>
+            <textarea
+              id="remote-clipboard"
+              value={remoteClipboardText}
+              readOnly
+              placeholder="Fetched Mac clipboard text appears here."
+              rows={3}
+            />
+            <div className="clipboard-actions">
+              <button type="button" className="secondary" onClick={() => void fetchMacClipboard()}>
+                Fetch Mac Clipboard
+              </button>
+              <button type="button" className="secondary" onClick={() => void copyFetchedTextToBrowser()}>
+                Copy To Browser
+              </button>
+            </div>
+          </div>
+          <p className="clipboard-status">{clipboardStatus}</p>
+        </section>
         {error ? <p className="error">{error}</p> : null}
       </section>
 

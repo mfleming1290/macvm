@@ -1,6 +1,10 @@
 import {
   AddIceCandidateRequest,
   AgentErrorCode,
+  ClipboardErrorMessage,
+  ClipboardGetMessage,
+  ClipboardSetMessage,
+  ClipboardValueMessage,
   ControlMessage,
   CreateSessionRequest,
   CreateSessionResponse,
@@ -9,6 +13,7 @@ import {
   PROTOCOL_VERSION,
   StreamQualitySettings,
   isCreateSessionResponse,
+  isControlMessage,
   isErrorResponse,
   isHealthResponse,
   isIceCandidatesResponse,
@@ -24,6 +29,7 @@ export type ConnectionState =
 export type ControlChannelState = "none" | "connecting" | "open" | "closing" | "closed";
 
 export interface AgentConnectionEvents {
+  onClipboardMessage: (message: ClipboardValueMessage | ClipboardErrorMessage) => void;
   onDiagnostics: (diagnostics: ConnectionDiagnostics) => void;
   onRemoteStream: (stream: MediaStream) => void;
   onStateChange: (state: ConnectionState) => void;
@@ -202,11 +208,50 @@ export class AgentConnection {
     const channel = peer.createDataChannel("macvm-control", { ordered: true });
     channel.onopen = () => this.emitDiagnostics();
     channel.onclose = () => this.emitDiagnostics();
+    channel.onmessage = (event) => {
+      try {
+        const parsed: unknown = JSON.parse(event.data);
+        if (!isControlMessage(parsed)) {
+          this.events.onError("The Mac agent returned a data-channel message that does not match the shared protocol.");
+          return;
+        }
+
+        if (parsed.type === "clipboard.value" || parsed.type === "clipboard.error") {
+          this.events.onClipboardMessage(parsed);
+          return;
+        }
+      } catch (error) {
+        this.events.onError(
+          error instanceof Error ? `Failed to parse clipboard response: ${error.message}` : String(error),
+        );
+      }
+    };
     channel.onerror = () => {
       this.events.onError("The input control channel reported an error.");
       this.emitDiagnostics();
     };
     return channel;
+  }
+
+  requestAgentClipboard(): boolean {
+    return this.sendControlMessage({
+      version: PROTOCOL_VERSION,
+      type: "clipboard.get",
+      sequence: Date.now(),
+      timestampMs: Date.now(),
+      source: "browser",
+    } satisfies ClipboardGetMessage);
+  }
+
+  setAgentClipboard(text: string): boolean {
+    return this.sendControlMessage({
+      version: PROTOCOL_VERSION,
+      type: "clipboard.set",
+      sequence: Date.now(),
+      timestampMs: Date.now(),
+      source: "browser",
+      text,
+    } satisfies ClipboardSetMessage);
   }
 
   private sendReset(reason: "disconnect" | "reconnect" | "manual"): void {

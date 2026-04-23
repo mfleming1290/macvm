@@ -102,6 +102,9 @@ export interface ControlDiagnostics {
   receivedMessages: number;
   injectedEvents: number;
   resetCount: number;
+  clipboardReads: number;
+  clipboardWrites: number;
+  lastClipboardTextLength: number | null;
   pressedKeys: number;
   pressedButtons: number;
   lastMessageType: ControlMessageType | null;
@@ -116,7 +119,11 @@ export type ControlMessageType =
   | "input.mouse.wheel"
   | "input.keyboard.key"
   | "input.reset"
-  | "stream.quality.update";
+  | "stream.quality.update"
+  | "clipboard.set"
+  | "clipboard.get"
+  | "clipboard.value"
+  | "clipboard.error";
 
 export type StreamResolutionPreset = "native" | "1440p" | "1080p" | "720p";
 
@@ -185,13 +192,46 @@ export interface StreamQualityUpdateMessage extends ControlMessageBase {
   settings: StreamQualitySettings;
 }
 
+export type ClipboardSource = "browser" | "agent";
+export type ClipboardErrorCode = "empty" | "non_text" | "read_failed" | "write_failed";
+
+export interface ClipboardSetMessage extends ControlMessageBase {
+  type: "clipboard.set";
+  source: ClipboardSource;
+  text: string;
+}
+
+export interface ClipboardGetMessage extends ControlMessageBase {
+  type: "clipboard.get";
+  source: ClipboardSource;
+}
+
+export interface ClipboardValueMessage extends ControlMessageBase {
+  type: "clipboard.value";
+  source: ClipboardSource;
+  replyToSequence: number | null;
+  text: string;
+}
+
+export interface ClipboardErrorMessage extends ControlMessageBase {
+  type: "clipboard.error";
+  source: ClipboardSource;
+  replyToSequence: number | null;
+  code: ClipboardErrorCode;
+  message: string;
+}
+
 export type ControlMessage =
   | MouseMoveMessage
   | MouseButtonMessage
   | MouseWheelMessage
   | KeyboardKeyMessage
   | InputResetMessage
-  | StreamQualityUpdateMessage;
+  | StreamQualityUpdateMessage
+  | ClipboardSetMessage
+  | ClipboardGetMessage
+  | ClipboardValueMessage
+  | ClipboardErrorMessage;
 
 export interface ErrorResponse {
   version: typeof PROTOCOL_VERSION;
@@ -296,6 +336,23 @@ export function isControlMessage(value: unknown): value is ControlMessage {
       );
     case "stream.quality.update":
       return isStreamQualitySettings(value.settings);
+    case "clipboard.set":
+      return isClipboardSource(value.source) && typeof value.text === "string";
+    case "clipboard.get":
+      return isClipboardSource(value.source);
+    case "clipboard.value":
+      return (
+        isClipboardSource(value.source) &&
+        (typeof value.replyToSequence === "number" || value.replyToSequence === null) &&
+        typeof value.text === "string"
+      );
+    case "clipboard.error":
+      return (
+        isClipboardSource(value.source) &&
+        (typeof value.replyToSequence === "number" || value.replyToSequence === null) &&
+        isClipboardErrorCode(value.code) &&
+        typeof value.message === "string"
+      );
   }
 }
 
@@ -350,6 +407,9 @@ function isControlDiagnostics(value: unknown): value is ControlDiagnostics {
     typeof value.receivedMessages === "number" &&
     typeof value.injectedEvents === "number" &&
     typeof value.resetCount === "number" &&
+    typeof value.clipboardReads === "number" &&
+    typeof value.clipboardWrites === "number" &&
+    (typeof value.lastClipboardTextLength === "number" || value.lastClipboardTextLength === null) &&
     typeof value.pressedKeys === "number" &&
     typeof value.pressedButtons === "number" &&
     (typeof value.lastMessageType === "string" || value.lastMessageType === null) &&
@@ -397,6 +457,19 @@ function isStreamQualitySettings(value: unknown): value is StreamQualitySettings
       value.resolutionPreset === "1440p" ||
       value.resolutionPreset === "1080p" ||
       value.resolutionPreset === "720p")
+  );
+}
+
+function isClipboardSource(value: unknown): value is ClipboardSource {
+  return value === "browser" || value === "agent";
+}
+
+function isClipboardErrorCode(value: unknown): value is ClipboardErrorCode {
+  return (
+    value === "empty" ||
+    value === "non_text" ||
+    value === "read_failed" ||
+    value === "write_failed"
   );
 }
 

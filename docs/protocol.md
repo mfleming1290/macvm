@@ -88,6 +88,74 @@ Request:
 }
 ```
 
+## WebRTC DataChannel Messages
+
+The browser and agent reuse the `macvm-control` WebRTC DataChannel for input, stream settings, and clipboard.
+
+Clipboard messages are explicit and text-only:
+
+### `clipboard.set`
+
+Browser sends plain text to the Mac clipboard.
+
+```json
+{
+  "version": 1,
+  "type": "clipboard.set",
+  "sequence": 101,
+  "timestampMs": 1713926400000,
+  "source": "browser",
+  "text": "hello from the browser"
+}
+```
+
+### `clipboard.get`
+
+Browser requests the current Mac clipboard text.
+
+```json
+{
+  "version": 1,
+  "type": "clipboard.get",
+  "sequence": 102,
+  "timestampMs": 1713926400500,
+  "source": "browser"
+}
+```
+
+### `clipboard.value`
+
+Agent replies with plain text from the Mac clipboard.
+
+```json
+{
+  "version": 1,
+  "type": "clipboard.value",
+  "sequence": 501,
+  "timestampMs": 1713926400600,
+  "source": "agent",
+  "replyToSequence": 102,
+  "text": "hello from the mac"
+}
+```
+
+### `clipboard.error`
+
+Agent replies when the Mac clipboard is empty, non-text, or could not be read/written.
+
+```json
+{
+  "version": 1,
+  "type": "clipboard.error",
+  "sequence": 502,
+  "timestampMs": 1713926400650,
+  "source": "agent",
+  "replyToSequence": 102,
+  "code": "non_text",
+  "message": "The Mac clipboard does not currently contain plain text."
+}
+```
+
 Response:
 
 ```json
