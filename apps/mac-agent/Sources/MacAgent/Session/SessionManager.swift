@@ -15,6 +15,8 @@ final class SessionManager {
     var mediaDiagnostics: MediaDiagnostics {
         var diagnostics = captureService.diagnostics
         if let webRTCDiagnostics = activeSession?.webRTCSession.diagnostics {
+            diagnostics.droppedBackpressureFrames = webRTCDiagnostics.droppedBackpressureFrames
+            diagnostics.droppedFrames += webRTCDiagnostics.droppedBackpressureFrames
             diagnostics.capturerFrames = webRTCDiagnostics.capturerFrames
             diagnostics.sourceFrames = webRTCDiagnostics.sourceFrames
             diagnostics.lastTimestampNs = webRTCDiagnostics.lastTimestampNs

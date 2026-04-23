@@ -72,7 +72,12 @@ export interface HealthResponse {
 export interface MediaDiagnostics {
   captureFrames: number;
   completeFrames: number;
+  submittedFrames: number;
   droppedFrames: number;
+  droppedIncompleteFrames: number;
+  droppedPacingFrames: number;
+  droppedBackpressureFrames: number;
+  targetFramesPerSecond: number;
   capturerFrames: number;
   sourceFrames: number;
   lastFrameWidth: number | null;
@@ -308,7 +313,12 @@ function isMediaDiagnostics(value: unknown): value is MediaDiagnostics {
     isRecord(value) &&
     typeof value.captureFrames === "number" &&
     typeof value.completeFrames === "number" &&
+    typeof value.submittedFrames === "number" &&
     typeof value.droppedFrames === "number" &&
+    typeof value.droppedIncompleteFrames === "number" &&
+    typeof value.droppedPacingFrames === "number" &&
+    typeof value.droppedBackpressureFrames === "number" &&
+    typeof value.targetFramesPerSecond === "number" &&
     typeof value.capturerFrames === "number" &&
     typeof value.sourceFrames === "number" &&
     (typeof value.lastFrameWidth === "number" || value.lastFrameWidth === null) &&

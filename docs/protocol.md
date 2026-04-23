@@ -51,6 +51,18 @@ Response:
 }
 ```
 
+The `media` object reports live capture and sender diagnostics. The most useful pacing fields are:
+
+- `captureFrames`: raw ScreenCaptureKit sample buffers received
+- `completeFrames`: complete frames after ScreenCaptureKit status filtering
+- `submittedFrames`: frames admitted by the explicit 30 fps pacing gate
+- `droppedIncompleteFrames`: invalid or incomplete capture frames
+- `droppedPacingFrames`: complete frames dropped to hold the target cadence
+- `droppedBackpressureFrames`: stale frames discarded when the WebRTC capturer is still busy
+- `targetFramesPerSecond`: current pacing target
+- `sourceFrames`: frames handed into the custom WebRTC capturer
+- `capturerFrames`: frames actually delivered into the WebRTC video source
+
 `status` may be:
 
 - `ok`

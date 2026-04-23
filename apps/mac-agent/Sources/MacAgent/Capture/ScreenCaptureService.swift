@@ -6,16 +6,21 @@ import ScreenCaptureKit
 
 final class ScreenCaptureService: NSObject, SCStreamOutput {
     var onFrame: ((CMSampleBuffer) -> Void)?
+    private let targetFramesPerSecond = 30
 
     private let diagnosticsLock = NSLock()
     private let outputQueue = DispatchQueue(label: "macvm.capture.output")
     private var captureFrames = 0
     private var completeFrames = 0
+    private var submittedFrames = 0
     private var droppedFrames = 0
+    private var droppedIncompleteFrames = 0
+    private var droppedPacingFrames = 0
     private var currentDisplayFrame = CGRect(x: 0, y: 0, width: 1, height: 1)
     private var lastFrameWidth: Int?
     private var lastFrameHeight: Int?
     private var lastPixelFormat: String?
+    private var submissionGate = FrameSubmissionGate(targetFramesPerSecond: 30)
     private var selectedStreamMaxLongEdge: Int?
     private var sourceDisplayHeight: Int?
     private var sourceDisplayWidth: Int?
@@ -30,7 +35,11 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         var diagnostics = MediaDiagnostics.empty
         diagnostics.captureFrames = captureFrames
         diagnostics.completeFrames = completeFrames
+        diagnostics.submittedFrames = submittedFrames
         diagnostics.droppedFrames = droppedFrames
+        diagnostics.droppedIncompleteFrames = droppedIncompleteFrames
+        diagnostics.droppedPacingFrames = droppedPacingFrames
+        diagnostics.targetFramesPerSecond = targetFramesPerSecond
         diagnostics.lastFrameWidth = lastFrameWidth
         diagnostics.lastFrameHeight = lastFrameHeight
         diagnostics.lastPixelFormat = lastPixelFormat
@@ -45,7 +54,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
             return CaptureConfiguration(
                 width: targetWidth,
                 height: targetHeight,
-                framesPerSecond: 30,
+                framesPerSecond: targetFramesPerSecond,
                 displayFrame: currentDisplayFrame,
                 sourceDisplayWidth: sourceDisplayWidth ?? targetWidth,
                 sourceDisplayHeight: sourceDisplayHeight ?? targetHeight,
@@ -74,8 +83,9 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         )
         configuration.width = captureSize.width
         configuration.height = captureSize.height
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
+        configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(targetFramesPerSecond))
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
+        configuration.queueDepth = 2
         configuration.showsCursor = true
 
         let nextStream = SCStream(filter: filter, configuration: configuration, delegate: nil)
@@ -92,7 +102,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         return CaptureConfiguration(
             width: captureSize.width,
             height: captureSize.height,
-            framesPerSecond: 30,
+            framesPerSecond: targetFramesPerSecond,
             displayFrame: currentDisplayFrame,
             sourceDisplayWidth: display.width,
             sourceDisplayHeight: display.height,
@@ -122,11 +132,17 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         recordReceivedFrame(sampleBuffer)
 
         guard sampleBuffer.isValid, isCompleteFrame(sampleBuffer) else {
-            recordDroppedFrame()
+            recordIncompleteDrop()
             return
         }
 
-        recordCompleteFrame(sampleBuffer)
+        recordCompleteFrame()
+        guard shouldSubmitFrame(sampleBuffer) else {
+            recordPacingDrop()
+            return
+        }
+
+        recordSubmittedFrame()
         onFrame?(sampleBuffer)
     }
 
@@ -159,7 +175,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         lastPixelFormat = pixelFormatName(CVPixelBufferGetPixelFormatType(pixelBuffer))
     }
 
-    private func recordCompleteFrame(_ sampleBuffer: CMSampleBuffer) {
+    private func recordCompleteFrame() {
         diagnosticsLock.lock()
         completeFrames += 1
         diagnosticsLock.unlock()
@@ -171,18 +187,63 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         diagnosticsLock.unlock()
     }
 
+    private func recordIncompleteDrop() {
+        diagnosticsLock.lock()
+        droppedFrames += 1
+        droppedIncompleteFrames += 1
+        diagnosticsLock.unlock()
+    }
+
+    private func recordPacingDrop() {
+        diagnosticsLock.lock()
+        droppedFrames += 1
+        droppedPacingFrames += 1
+        diagnosticsLock.unlock()
+    }
+
+    private func recordSubmittedFrame() {
+        diagnosticsLock.lock()
+        submittedFrames += 1
+        diagnosticsLock.unlock()
+    }
+
     private func resetDiagnostics() {
         diagnosticsLock.lock()
         captureFrames = 0
         completeFrames = 0
+        submittedFrames = 0
         droppedFrames = 0
+        droppedIncompleteFrames = 0
+        droppedPacingFrames = 0
         lastFrameWidth = nil
         lastFrameHeight = nil
         lastPixelFormat = nil
+        submissionGate.reset()
         sourceDisplayWidth = nil
         sourceDisplayHeight = nil
         selectedStreamMaxLongEdge = nil
         diagnosticsLock.unlock()
+    }
+
+    private func shouldSubmitFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
+        let timestampNs = sampleTimestampNs(for: sampleBuffer)
+
+        diagnosticsLock.lock()
+        let shouldSubmit = submissionGate.shouldSubmit(timestampNs: timestampNs)
+        diagnosticsLock.unlock()
+        return shouldSubmit
+    }
+
+    private func sampleTimestampNs(for sampleBuffer: CMSampleBuffer) -> Int64 {
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if timestamp.isValid, !timestamp.isIndefinite {
+            let seconds = CMTimeGetSeconds(timestamp)
+            if seconds.isFinite, seconds >= 0 {
+                return Int64(seconds * 1_000_000_000)
+            }
+        }
+
+        return Int64(DispatchTime.now().uptimeNanoseconds)
     }
 
     private func scaledCaptureSize(width: Int, height: Int, maxLongEdge: Int?) -> (width: Int, height: Int) {

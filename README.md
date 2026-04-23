@@ -86,20 +86,26 @@ curl http://127.0.0.1:8080/api/health
 
 The response should be JSON with `status: "ok"` when Screen Recording is granted.
 
-For an active stream, `media` should show frame flow all the way through the sender:
+For an active stream, `media` should show stable paced frame flow all the way through the sender:
 
 ```json
 {
   "captureFrames": 244,
   "completeFrames": 244,
-  "capturerFrames": 244,
-  "sourceFrames": 244,
+  "submittedFrames": 122,
+  "droppedPacingFrames": 122,
+  "droppedBackpressureFrames": 0,
+  "targetFramesPerSecond": 30,
+  "capturerFrames": 122,
+  "sourceFrames": 122,
   "senderAttached": true,
   "senderTrackReadyState": "live",
   "lastFrameWidth": 1920,
   "lastFrameHeight": 1080
 }
 ```
+
+`captureFrames` counts raw ScreenCaptureKit sample buffers, `submittedFrames` counts frames admitted after the 30 fps pacing gate, and `droppedBackpressureFrames` counts stale frames discarded inside the custom WebRTC capturer when the sender is still busy. During fast motion, a healthy low-latency session may show pacing or backpressure drops, but it should not build an ever-growing backlog of old frames.
 
 The browser also shows a small Media Diagnostics panel. A healthy stream shows a live remote track, decoded frames, and non-zero video dimensions. The web client constrains the remote video inside the viewport with `object-fit: contain`, so the full desktop should be visible without page scrolling.
 
@@ -120,4 +126,4 @@ For input, `/api/health` should include `accessibilityAllowed: true` and a `cont
 
 The browser shell is fixed to `100vw` by `100vh` with page-level overflow hidden. Inside the center stage, the browser computes an explicit floating frame from the stage size and intrinsic stream size, then renders the video into that frame. That frame preserves aspect ratio, scales to the largest contained size, and is reused for pointer mapping diagnostics.
 
-The agent caps oversized capture output to a 1920-pixel long edge while preserving display aspect ratio, then sets the WebRTC sender to a higher-bitrate screen-stream profile. The browser bitrate slider now supports up to 50 Mbps, but changes are committed on release instead of being applied continuously during drag so interaction stays responsive.
+The agent caps oversized capture output to a 1920-pixel long edge while preserving display aspect ratio, then sets the WebRTC sender to a higher-bitrate screen-stream profile. Capture is paced at 30 fps, ScreenCaptureKit queue depth is kept low, and the custom WebRTC bridge keeps only the newest pending frame under load so latency does not grow behind old desktop frames. The browser bitrate slider now supports up to 50 Mbps, but changes are committed on release instead of being applied continuously during drag so interaction stays responsive.

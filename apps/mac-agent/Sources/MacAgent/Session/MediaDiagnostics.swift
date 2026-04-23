@@ -3,7 +3,12 @@ import Foundation
 struct MediaDiagnostics: Codable {
     var captureFrames: Int
     var completeFrames: Int
+    var submittedFrames: Int
     var droppedFrames: Int
+    var droppedIncompleteFrames: Int
+    var droppedPacingFrames: Int
+    var droppedBackpressureFrames: Int
+    var targetFramesPerSecond: Int
     var capturerFrames: Int
     var sourceFrames: Int
     var lastFrameWidth: Int?
@@ -24,7 +29,12 @@ struct MediaDiagnostics: Codable {
     enum CodingKeys: String, CodingKey {
         case captureFrames
         case completeFrames
+        case submittedFrames
         case droppedFrames
+        case droppedIncompleteFrames
+        case droppedPacingFrames
+        case droppedBackpressureFrames
+        case targetFramesPerSecond
         case capturerFrames
         case sourceFrames
         case lastFrameWidth
@@ -46,7 +56,12 @@ struct MediaDiagnostics: Codable {
     static let empty = MediaDiagnostics(
         captureFrames: 0,
         completeFrames: 0,
+        submittedFrames: 0,
         droppedFrames: 0,
+        droppedIncompleteFrames: 0,
+        droppedPacingFrames: 0,
+        droppedBackpressureFrames: 0,
+        targetFramesPerSecond: 0,
         capturerFrames: 0,
         sourceFrames: 0,
         lastFrameWidth: nil,
@@ -69,7 +84,12 @@ struct MediaDiagnostics: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(captureFrames, forKey: .captureFrames)
         try container.encode(completeFrames, forKey: .completeFrames)
+        try container.encode(submittedFrames, forKey: .submittedFrames)
         try container.encode(droppedFrames, forKey: .droppedFrames)
+        try container.encode(droppedIncompleteFrames, forKey: .droppedIncompleteFrames)
+        try container.encode(droppedPacingFrames, forKey: .droppedPacingFrames)
+        try container.encode(droppedBackpressureFrames, forKey: .droppedBackpressureFrames)
+        try container.encode(targetFramesPerSecond, forKey: .targetFramesPerSecond)
         try container.encode(capturerFrames, forKey: .capturerFrames)
         try container.encode(sourceFrames, forKey: .sourceFrames)
         try container.encode(lastFrameWidth, forKey: .lastFrameWidth)
