@@ -27,28 +27,30 @@ The current direction is:
 - one macOS agent running on the target Mac
 - one browser client running on another device
 - low-latency screen streaming from the Mac to the browser
-- future low-latency mouse and keyboard return path from the browser back to the Mac agent
-- future local input injection on the Mac through approved macOS APIs
+- low-latency mouse and keyboard return path from the browser back to the Mac agent
+- local input injection on the Mac through approved macOS APIs
 - a simple session model suitable for a single-user software-KVM workflow
 
 This is not a marketplace plugin system, a team collaboration product, or a cloud-first remote access SaaS.
 
 ## Current MVP Scope
 
-The first working version proves the media stack only:
+The first working version proves the media and input stack:
 
 - screen capture on macOS
 - WebRTC-compatible real-time video delivery to a browser
 - browser rendering with a `<video>` element
 - minimal HTTP signaling for offer, answer, and ICE candidates
+- WebRTC DataChannel input control bound to the active peer connection
+- mouse movement, left/right button, wheel, keyboard key down/up, and basic modifiers
+- normalized browser coordinate mapping into the captured display
 - one active viewer session
-- explicit Screen Recording permission handling
+- explicit Screen Recording and Accessibility permission handling
 
-Mouse, keyboard, coordinate mapping, Accessibility permission, data-channel control, and stuck-input cleanup are intentionally deferred until the input/control milestone.
+Input control is intentionally MVP-focused. File transfer, clipboard sync, multi-viewer control, and exhaustive keyboard-layout/IME support remain out of scope.
 
 Out of scope for the current MVP:
 
-- mouse and keyboard control
 - remote audio
 - multi-user collaboration
 - file transfer
@@ -83,19 +85,18 @@ docs/
 
 Logical boundaries:
 
-- `apps/mac-agent/` owns capture, media encoding/frame delivery, WebRTC peer setup, local HTTP signaling, session lifecycle, permission checks, and diagnostics.
-- `apps/web-client/` owns session join UI, browser-side WebRTC setup, remote video rendering, connection state, and diagnostics.
+- `apps/mac-agent/` owns capture, media encoding/frame delivery, WebRTC peer setup, local HTTP signaling, session lifecycle, permission checks, input decoding/injection, and diagnostics.
+- `apps/web-client/` owns session join UI, browser-side WebRTC setup, remote video rendering, normalized local input capture, connection state, and diagnostics.
 - `packages/protocol/` owns browser-facing protocol definitions. Do not duplicate message contracts ad hoc.
 
 ## Core System Model
 
-The stack currently has three active planes:
+The stack currently has four active planes:
 
 - Capture plane: ScreenCaptureKit captures the Mac display.
 - Media transport plane: WebRTC transports live video to the browser.
 - Session/signaling plane: the Mac agent hosts minimal HTTP endpoints for offer, answer, ICE, health, and teardown.
-
-The control plane is future work. When added, it must use normalized protocol messages, session-bound authorization, centralized coordinate mapping, and macOS-native input injection through approved APIs.
+- Control plane: the browser sends normalized input messages over a WebRTC DataChannel and the Mac agent maps/injects them through CoreGraphics.
 
 ## Technology Direction
 
@@ -107,20 +108,21 @@ The control plane is future work. When added, it must use normalized protocol me
 - ScreenCaptureKit for screen capture
 - LiveKitWebRTC for native WebRTC media
 - Network.framework for the minimal local HTTP signaling server
-- centralized Screen Recording permission checks
+- centralized Screen Recording and Accessibility permission checks
+- CoreGraphics event injection for mouse, wheel, and keyboard input
 
 ### Web Client
 
 - TypeScript
 - React with Vite
 - browser-native WebRTC
+- WebRTC DataChannel sender for input control
 - a single remote-view page with minimal chrome
 
 ### Shared
 
-- TypeScript definitions for HTTP signaling messages
+- TypeScript definitions for HTTP signaling and DataChannel control messages
 - versioned protocol constants
-- future canonical input event schemas only when input control is implemented
 
 Do not introduce heavy backend frameworks, databases, brokers, or cloud services without a clear reason.
 
@@ -140,14 +142,11 @@ Known failures should use versioned JSON error responses instead of plain text w
 
 ## Security Rules
 
-The current MVP signaling endpoint is local-network development infrastructure for one viewer and no input control. Do not describe it as hardened internet-safe remote access.
+The current MVP signaling endpoint is local-network development infrastructure for one viewer. Do not describe it as hardened internet-safe remote access.
 
-Before input control is added:
+Current input control is bound to the negotiated WebRTC peer connection through the `macvm-control` DataChannel. There must be no separate unauthenticated HTTP/WebSocket control endpoint.
 
-- add a real pairing token, session token, or explicit approval flow
-- bind media and control to the same authenticated session
-- enforce origin/session checks on control messages
-- ensure stale sessions expire cleanly
+Before exposing this beyond local development, add a real pairing token, session token, or explicit approval flow, enforce origin/session checks, and ensure stale sessions expire cleanly.
 
 Never add an unauthenticated control endpoint.
 
@@ -155,12 +154,7 @@ Never add an unauthenticated control endpoint.
 
 The Mac agent must treat macOS permissions as first-class product behavior.
 
-Current permission:
-
 - Screen Recording / screen capture
-
-Future input-control permission:
-
 - Accessibility / input control
 
 Rules:
@@ -180,10 +174,12 @@ The current implementation must support:
 
 - connection setup
 - live video rendering in a `<video>` element
+- mouse move, left/right click, wheel scroll, keyboard key down/up, and basic modifiers through the remote surface
+- blur, disconnect, reconnect, and session-end reset paths to prevent stuck input
 - connection state display
 - obvious disconnect/reconnect affordance
 
-Do not add browser mouse, keyboard, or wheel capture until input control is explicitly in scope.
+Do not send raw DOM events over the wire. Browser input must be normalized into shared protocol messages before transport.
 
 ## Video and Performance Rules
 
@@ -202,23 +198,25 @@ Rules:
 First priorities:
 
 - protocol serialization/deserialization
+- coordinate mapping and control-message decoding
 - CORS/preflight compatibility from the web dev-server origin
 - session state transitions
 - capture/signaling/WebRTC negotiation behavior
 - frontend build correctness
 - agent build and launch correctness
 
-Add coordinate mapping, keyboard normalization, and stuck-key cleanup tests when input control is implemented.
-
 Manual MVP verification:
 
 - the Mac agent launches cleanly
 - the generated app bundle launches cleanly
 - Screen Recording permission state is shown accurately
+- Accessibility permission state is shown accurately
 - the browser can connect to the Mac agent
 - the browser receives a live view of the Mac display
+- left click, right click, scroll, basic typing, and a basic modifier shortcut work
 - disconnecting closes the media session
-- reconnecting restores a clean media session
+- disconnecting or blurring releases pressed input state
+- reconnecting restores a clean media and control session
 
 ## First Implementation Milestones
 
@@ -231,13 +229,13 @@ Build in this order unless there is a strong reason not to:
 5. Live video stream from Mac to browser
 6. Disconnect/reconnect cleanup for media sessions
 7. Diagnostics and polish
-8. Pairing/session hardening before control
-9. Data channel or equivalent control channel
-10. Mouse movement and click injection
-11. Keyboard injection
-12. Coordinate mapping hardening
+8. Data channel control channel
+9. Mouse movement and click injection
+10. Keyboard injection
+11. Coordinate mapping hardening
+12. Pairing/session hardening before non-local use
 
-Do not skip to input control before the media stream and session lifecycle are reliable.
+Do not expand beyond local control features before the media stream and session lifecycle remain reliable.
 
 ## Code Quality Rules
 
@@ -249,8 +247,8 @@ Rules:
 - do not mix capture logic with signaling or transport plumbing unnecessarily
 - do not hide session state inside unstructured globals
 - keep permission logic centralized
-- when input exists, keep browser event normalization separate from transport plumbing
-- when input exists, keep Mac input injection separate from session transport logic
+- keep browser event normalization separate from transport plumbing
+- keep Mac input injection separate from session transport logic
 
 If a file grows too large, split it by responsibility, not by arbitrary naming.
 
@@ -259,10 +257,11 @@ If a file grows too large, split it by responsibility, not by arbitrary naming.
 The current MVP is complete when a user can:
 
 - run the Mac agent
-- grant required Screen Recording permission
+- grant required Screen Recording and Accessibility permissions
 - open a browser on another machine
 - connect to the Mac
 - see the Mac display live
-- disconnect and reconnect without corrupted media session state
+- move, click, scroll, and type through the remote view
+- disconnect and reconnect without corrupted media or input state
 
-If any of those fail, the current media stack is not yet proven.
+If any of those fail, the current MVP stack is not yet proven.

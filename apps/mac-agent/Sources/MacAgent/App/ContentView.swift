@@ -19,6 +19,12 @@ struct ContentView: View {
             )
 
             StatusRow(
+                title: "Accessibility",
+                value: appState.accessibilityAllowed ? "Allowed" : "Not granted",
+                isHealthy: appState.accessibilityAllowed
+            )
+
+            StatusRow(
                 title: "Signaling",
                 value: appState.serverStatus,
                 isHealthy: appState.serverStatus.contains("Listening")
@@ -30,11 +36,17 @@ struct ContentView: View {
                 isHealthy: appState.sessionStatus == "Streaming"
             )
 
-            DiagnosticsView(diagnostics: appState.mediaDiagnostics)
+            DiagnosticsView(
+                mediaDiagnostics: appState.mediaDiagnostics,
+                controlDiagnostics: appState.controlDiagnostics
+            )
 
             HStack {
                 Button("Request Screen Recording Permission") {
                     appState.requestScreenRecordingPermission()
+                }
+                Button("Request Accessibility Permission") {
+                    appState.requestAccessibilityPermission()
                 }
                 Button("Refresh Status") {
                     appState.refreshPermissionStatus()
@@ -51,20 +63,21 @@ struct ContentView: View {
 }
 
 private struct DiagnosticsView: View {
-    let diagnostics: MediaDiagnostics
+    let mediaDiagnostics: MediaDiagnostics
+    let controlDiagnostics: ControlDiagnostics
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
             GridRow {
                 Text("Capture")
                     .fontWeight(.semibold)
-                Text("\(diagnostics.completeFrames)/\(diagnostics.captureFrames) complete, \(diagnostics.droppedFrames) dropped")
+                Text("\(mediaDiagnostics.completeFrames)/\(mediaDiagnostics.captureFrames) complete, \(mediaDiagnostics.droppedFrames) dropped")
                     .foregroundStyle(.secondary)
             }
             GridRow {
                 Text("Bridge")
                     .fontWeight(.semibold)
-                Text("\(diagnostics.capturerFrames) capturer frames, \(diagnostics.sourceFrames) source frames")
+                Text("\(mediaDiagnostics.capturerFrames) capturer frames, \(mediaDiagnostics.sourceFrames) source frames")
                     .foregroundStyle(.secondary)
             }
             GridRow {
@@ -76,7 +89,19 @@ private struct DiagnosticsView: View {
             GridRow {
                 Text("Sender")
                     .fontWeight(.semibold)
-                Text("\(diagnostics.senderAttached ? "attached" : "missing"), track \(diagnostics.senderTrackReadyState), ICE \(diagnostics.iceConnectionState)")
+                Text("\(mediaDiagnostics.senderAttached ? "attached" : "missing"), track \(mediaDiagnostics.senderTrackReadyState), ICE \(mediaDiagnostics.iceConnectionState)")
+                    .foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Control")
+                    .fontWeight(.semibold)
+                Text("\(controlDiagnostics.channelState), \(controlDiagnostics.injectedEvents)/\(controlDiagnostics.receivedMessages) injected, resets \(controlDiagnostics.resetCount)")
+                    .foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Input state")
+                    .fontWeight(.semibold)
+                Text("\(controlDiagnostics.pressedButtons) buttons, \(controlDiagnostics.pressedKeys) keys, error \(controlDiagnostics.lastError ?? "none")")
                     .foregroundStyle(.secondary)
             }
         }
@@ -86,11 +111,11 @@ private struct DiagnosticsView: View {
     }
 
     private var frameDescription: String {
-        guard let width = diagnostics.lastFrameWidth, let height = diagnostics.lastFrameHeight else {
+        guard let width = mediaDiagnostics.lastFrameWidth, let height = mediaDiagnostics.lastFrameHeight else {
             return "none"
         }
 
-        return "\(width)x\(height) \(diagnostics.lastPixelFormat ?? "unknown")"
+        return "\(width)x\(height) \(mediaDiagnostics.lastPixelFormat ?? "unknown")"
     }
 }
 

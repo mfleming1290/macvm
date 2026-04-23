@@ -3,6 +3,7 @@ export const PROTOCOL_VERSION = 1;
 export type AgentHealthStatus =
   | "ok"
   | "permissionMissing"
+  | "accessibilityMissing"
   | "captureFailed"
   | "negotiationFailed"
   | "serverFailed";
@@ -10,6 +11,7 @@ export type AgentHealthStatus =
 export type AgentErrorCode =
   | "capture_failed"
   | "invalid_ice_candidate"
+  | "invalid_input"
   | "invalid_json"
   | "invalid_offer"
   | "negotiation_failed"
@@ -58,10 +60,12 @@ export interface HealthResponse {
   status: AgentHealthStatus;
   activeSession: boolean;
   screenRecordingAllowed: boolean;
+  accessibilityAllowed: boolean;
   sessionStatus: string;
   serverStatus: string;
   lastError: string | null;
   media: MediaDiagnostics;
+  control: ControlDiagnostics;
 }
 
 export interface MediaDiagnostics {
@@ -82,6 +86,89 @@ export interface MediaDiagnostics {
   iceConnectionState: string;
 }
 
+export interface ControlDiagnostics {
+  channelState: "none" | "connecting" | "open" | "closing" | "closed";
+  accessibilityAllowed: boolean;
+  receivedMessages: number;
+  injectedEvents: number;
+  resetCount: number;
+  pressedKeys: number;
+  pressedButtons: number;
+  lastMessageType: ControlMessageType | null;
+  lastMappedX: number | null;
+  lastMappedY: number | null;
+  lastError: string | null;
+}
+
+export type ControlMessageType =
+  | "input.mouse.move"
+  | "input.mouse.button"
+  | "input.mouse.wheel"
+  | "input.keyboard.key"
+  | "input.reset";
+
+export type MouseButton = "left" | "right";
+export type InputAction = "down" | "up";
+
+export interface ModifierState {
+  shift: boolean;
+  control: boolean;
+  alt: boolean;
+  meta: boolean;
+}
+
+export interface ControlMessageBase {
+  version: typeof PROTOCOL_VERSION;
+  type: ControlMessageType;
+  sequence: number;
+  timestampMs: number;
+}
+
+export interface MouseMoveMessage extends ControlMessageBase {
+  type: "input.mouse.move";
+  x: number;
+  y: number;
+  buttons: MouseButton[];
+}
+
+export interface MouseButtonMessage extends ControlMessageBase {
+  type: "input.mouse.button";
+  button: MouseButton;
+  action: InputAction;
+  x: number;
+  y: number;
+  buttons: MouseButton[];
+}
+
+export interface MouseWheelMessage extends ControlMessageBase {
+  type: "input.mouse.wheel";
+  deltaX: number;
+  deltaY: number;
+  x: number;
+  y: number;
+}
+
+export interface KeyboardKeyMessage extends ControlMessageBase {
+  type: "input.keyboard.key";
+  action: InputAction;
+  code: string;
+  key: string;
+  modifiers: ModifierState;
+  repeat: boolean;
+}
+
+export interface InputResetMessage extends ControlMessageBase {
+  type: "input.reset";
+  reason: "blur" | "disconnect" | "reconnect" | "visibilitychange" | "manual";
+}
+
+export type ControlMessage =
+  | MouseMoveMessage
+  | MouseButtonMessage
+  | MouseWheelMessage
+  | KeyboardKeyMessage
+  | InputResetMessage;
+
 export interface ErrorResponse {
   version: typeof PROTOCOL_VERSION;
   error: {
@@ -100,10 +187,12 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
     typeof value.status === "string" &&
     typeof value.activeSession === "boolean" &&
     typeof value.screenRecordingAllowed === "boolean" &&
+    typeof value.accessibilityAllowed === "boolean" &&
     typeof value.sessionStatus === "string" &&
     typeof value.serverStatus === "string" &&
     (typeof value.lastError === "string" || value.lastError === null) &&
-    isMediaDiagnostics(value.media)
+    isMediaDiagnostics(value.media) &&
+    isControlDiagnostics(value.control)
   );
 }
 
@@ -142,6 +231,48 @@ export function isErrorResponse(value: unknown): value is ErrorResponse {
   );
 }
 
+export function isControlMessage(value: unknown): value is ControlMessage {
+  if (!isControlMessageBase(value)) {
+    return false;
+  }
+
+  switch (value.type) {
+    case "input.mouse.move":
+      return isNormalizedCoordinate(value.x) && isNormalizedCoordinate(value.y) && isMouseButtonArray(value.buttons);
+    case "input.mouse.button":
+      return (
+        isMouseButton(value.button) &&
+        isInputAction(value.action) &&
+        isNormalizedCoordinate(value.x) &&
+        isNormalizedCoordinate(value.y) &&
+        isMouseButtonArray(value.buttons)
+      );
+    case "input.mouse.wheel":
+      return (
+        typeof value.deltaX === "number" &&
+        typeof value.deltaY === "number" &&
+        isNormalizedCoordinate(value.x) &&
+        isNormalizedCoordinate(value.y)
+      );
+    case "input.keyboard.key":
+      return (
+        isInputAction(value.action) &&
+        typeof value.code === "string" &&
+        typeof value.key === "string" &&
+        isModifierState(value.modifiers) &&
+        typeof value.repeat === "boolean"
+      );
+    case "input.reset":
+      return (
+        value.reason === "blur" ||
+        value.reason === "disconnect" ||
+        value.reason === "reconnect" ||
+        value.reason === "visibilitychange" ||
+        value.reason === "manual"
+      );
+  }
+}
+
 function isIceCandidate(value: unknown): value is IceCandidateMessage {
   return (
     isRecord(value) &&
@@ -170,6 +301,63 @@ function isMediaDiagnostics(value: unknown): value is MediaDiagnostics {
     typeof value.signalingState === "string" &&
     typeof value.iceConnectionState === "string"
   );
+}
+
+function isControlDiagnostics(value: unknown): value is ControlDiagnostics {
+  return (
+    isRecord(value) &&
+    (value.channelState === "none" ||
+      value.channelState === "connecting" ||
+      value.channelState === "open" ||
+      value.channelState === "closing" ||
+      value.channelState === "closed") &&
+    typeof value.accessibilityAllowed === "boolean" &&
+    typeof value.receivedMessages === "number" &&
+    typeof value.injectedEvents === "number" &&
+    typeof value.resetCount === "number" &&
+    typeof value.pressedKeys === "number" &&
+    typeof value.pressedButtons === "number" &&
+    (typeof value.lastMessageType === "string" || value.lastMessageType === null) &&
+    (typeof value.lastMappedX === "number" || value.lastMappedX === null) &&
+    (typeof value.lastMappedY === "number" || value.lastMappedY === null) &&
+    (typeof value.lastError === "string" || value.lastError === null)
+  );
+}
+
+function isControlMessageBase(value: unknown): value is ControlMessage {
+  return (
+    isRecord(value) &&
+    value.version === PROTOCOL_VERSION &&
+    typeof value.type === "string" &&
+    typeof value.sequence === "number" &&
+    typeof value.timestampMs === "number"
+  );
+}
+
+function isModifierState(value: unknown): value is ModifierState {
+  return (
+    isRecord(value) &&
+    typeof value.shift === "boolean" &&
+    typeof value.control === "boolean" &&
+    typeof value.alt === "boolean" &&
+    typeof value.meta === "boolean"
+  );
+}
+
+function isMouseButton(value: unknown): value is MouseButton {
+  return value === "left" || value === "right";
+}
+
+function isInputAction(value: unknown): value is InputAction {
+  return value === "down" || value === "up";
+}
+
+function isMouseButtonArray(value: unknown): value is MouseButton[] {
+  return Array.isArray(value) && value.every(isMouseButton);
+}
+
+function isNormalizedCoordinate(value: unknown): value is number {
+  return typeof value === "number" && value >= 0 && value <= 1;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

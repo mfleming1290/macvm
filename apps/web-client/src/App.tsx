@@ -1,4 +1,5 @@
 import { FormEvent, useRef, useState } from "react";
+import { RemoteInputController } from "./input/RemoteInputController";
 import { AgentConnection, ConnectionDiagnostics, ConnectionState } from "./webrtc/AgentConnection";
 
 const defaultAgentUrl = "http://localhost:8080";
@@ -13,6 +14,7 @@ interface VideoDiagnostics {
 }
 
 const emptyConnectionDiagnostics: ConnectionDiagnostics = {
+  controlChannelState: "none",
   connectionState: "none",
   iceConnectionState: "none",
   signalingState: "none",
@@ -41,16 +43,27 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [videoDiagnostics, setVideoDiagnostics] = useState<VideoDiagnostics>(emptyVideoDiagnostics);
   const connectionRef = useRef<AgentConnection | null>(null);
+  const inputControllerRef = useRef<RemoteInputController | null>(null);
+  const stageRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const warnedControlNotReadyRef = useRef(false);
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    warnedControlNotReadyRef.current = false;
 
+    inputControllerRef.current?.detach("reconnect");
+    inputControllerRef.current = null;
     await connectionRef.current?.disconnect();
 
     const connection = new AgentConnection(agentUrl, {
-      onDiagnostics: setConnectionDiagnostics,
+      onDiagnostics: (diagnostics) => {
+        if (diagnostics.controlChannelState === "open") {
+          warnedControlNotReadyRef.current = false;
+        }
+        setConnectionDiagnostics(diagnostics);
+      },
       onError: setError,
       onRemoteStream: async (stream) => {
         if (videoRef.current) {
@@ -73,13 +86,33 @@ export default function App() {
 
     try {
       await connection.connect();
+      if (stageRef.current && videoRef.current) {
+        const inputController = new RemoteInputController(
+          stageRef.current,
+          videoRef.current,
+          (message) => {
+            if (!connection.sendControlMessage(message)) {
+              if (!warnedControlNotReadyRef.current) {
+                warnedControlNotReadyRef.current = true;
+                setError("Input is not ready yet. Wait for the control channel to open, then try again.");
+              }
+            }
+          },
+        );
+        inputController.attach();
+        inputControllerRef.current = inputController;
+      }
     } catch (nextError) {
+      inputControllerRef.current?.detach("disconnect");
+      inputControllerRef.current = null;
       setConnectionState("failed");
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     }
   }
 
   async function disconnect() {
+    inputControllerRef.current?.detach("disconnect");
+    inputControllerRef.current = null;
     await connectionRef.current?.disconnect();
     connectionRef.current = null;
     if (videoRef.current) {
@@ -139,7 +172,7 @@ export default function App() {
         {error ? <p className="error">{error}</p> : null}
       </section>
 
-      <section className="remote-stage" aria-label="Remote display">
+      <section className="remote-stage" aria-label="Remote display" ref={stageRef}>
         <video
           ref={videoRef}
           autoPlay
@@ -164,6 +197,8 @@ export default function App() {
           </strong>
           <span>Signaling</span>
           <strong>{connectionDiagnostics.signalingState}</strong>
+          <span>Control channel</span>
+          <strong>{connectionDiagnostics.controlChannelState}</strong>
           <span>Remote track</span>
           <strong>
             {connectionDiagnostics.remoteVideoTrackState} ({connectionDiagnostics.remoteTrackCount} tracks)

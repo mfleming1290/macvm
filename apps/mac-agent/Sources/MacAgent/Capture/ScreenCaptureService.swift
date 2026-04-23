@@ -1,5 +1,6 @@
 import CoreMedia
 import CoreVideo
+import CoreGraphics
 import Foundation
 import ScreenCaptureKit
 
@@ -11,6 +12,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
     private var captureFrames = 0
     private var completeFrames = 0
     private var droppedFrames = 0
+    private var currentDisplayFrame = CGRect(x: 0, y: 0, width: 1, height: 1)
     private var lastFrameWidth: Int?
     private var lastFrameHeight: Int?
     private var lastPixelFormat: String?
@@ -34,7 +36,12 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
 
     func start() async throws -> CaptureConfiguration {
         if stream != nil {
-            return CaptureConfiguration(width: targetWidth, height: targetHeight, framesPerSecond: 30)
+            return CaptureConfiguration(
+                width: targetWidth,
+                height: targetHeight,
+                framesPerSecond: 30,
+                displayFrame: currentDisplayFrame
+            )
         }
 
         resetDiagnostics()
@@ -62,8 +69,14 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         stream = nextStream
         targetWidth = display.width
         targetHeight = display.height
+        currentDisplayFrame = CGDisplayBounds(CGDirectDisplayID(display.displayID))
 
-        return CaptureConfiguration(width: display.width, height: display.height, framesPerSecond: 30)
+        return CaptureConfiguration(
+            width: display.width,
+            height: display.height,
+            framesPerSecond: 30,
+            displayFrame: currentDisplayFrame
+        )
     }
 
     func stop() async {
@@ -167,6 +180,7 @@ struct CaptureConfiguration {
     let width: Int
     let height: Int
     let framesPerSecond: Int
+    let displayFrame: CGRect
 }
 
 enum CaptureError: LocalizedError {

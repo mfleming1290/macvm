@@ -1,6 +1,6 @@
 # macOS Permissions
 
-The first MVP requires Screen Recording permission because the Mac agent captures the display with ScreenCaptureKit.
+The MVP requires Screen Recording permission for capture and Accessibility permission for remote input.
 
 The app checks permission at launch using `CGPreflightScreenCaptureAccess()` and can trigger the system prompt with `CGRequestScreenCaptureAccess()`.
 
@@ -27,4 +27,14 @@ If capture fails:
 4. Enable permission for **macvm Agent**.
 5. Restart the Mac agent.
 
-Accessibility permission is not required yet because keyboard and mouse input are intentionally out of scope for this version.
+Remote mouse and keyboard control require Accessibility permission because the agent injects local CoreGraphics events.
+
+If input does not work:
+
+1. Open System Settings.
+2. Go to Privacy & Security.
+3. Open Accessibility.
+4. Enable permission for **macvm Agent**.
+5. Restart the Mac agent or click **Refresh Status** in the agent window.
+
+The app exposes this state as `accessibilityAllowed` in `/api/health` and in the SwiftUI status window. Video streaming can still work without Accessibility permission, but input messages are ignored with a diagnostic error until the permission is granted.

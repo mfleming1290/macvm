@@ -6,6 +6,7 @@ final class WebRTCSession: NSObject {
     private let factory: LKRTCPeerConnectionFactory
     private let peerConnection: LKRTCPeerConnection
     private let screenCapturer: ScreenFrameCapturer
+    private let inputController = InputController()
     private let videoSource: LKRTCVideoSource
     private let videoTrack: LKRTCVideoTrack
     private let candidateLock = NSLock()
@@ -14,6 +15,7 @@ final class WebRTCSession: NSObject {
     private var localCandidates: [IceCandidate] = []
     private var sender: LKRTCRtpSender?
     private var signalingState = "new"
+    private lazy var controlChannelHandler = ControlChannelHandler(inputController: inputController)
 
     override init() {
         LKRTCInitializeSSL()
@@ -73,9 +75,14 @@ final class WebRTCSession: NSObject {
         return diagnostics
     }
 
+    var controlDiagnostics: ControlDiagnostics {
+        controlChannelHandler.diagnostics
+    }
+
     func createAnswer(for offer: SessionDescription, captureConfiguration: CaptureConfiguration) async throws -> SessionDescription {
         let remoteDescription = LKRTCSessionDescription(type: .offer, sdp: offer.sdp)
         try await setRemoteDescription(remoteDescription)
+        inputController.update(captureConfiguration: captureConfiguration)
         configureVideoSource(captureConfiguration)
         attachVideoTrackIfNeeded()
 
@@ -114,6 +121,7 @@ final class WebRTCSession: NSObject {
     }
 
     func close() {
+        controlChannelHandler.resetAndClose()
         peerConnection.close()
     }
 
@@ -220,7 +228,15 @@ extension WebRTCSession: LKRTCPeerConnectionDelegate {
     }
     func peerConnection(_ peerConnection: LKRTCPeerConnection, didChange newState: LKRTCIceGatheringState) {}
     func peerConnection(_ peerConnection: LKRTCPeerConnection, didRemove candidates: [LKRTCIceCandidate]) {}
-    func peerConnection(_ peerConnection: LKRTCPeerConnection, didOpen dataChannel: LKRTCDataChannel) {}
+    func peerConnection(_ peerConnection: LKRTCPeerConnection, didOpen dataChannel: LKRTCDataChannel) {
+        guard dataChannel.label == "macvm-control" else {
+            print("macvm control: closing unexpected data channel label=\(dataChannel.label)")
+            dataChannel.close()
+            return
+        }
+
+        controlChannelHandler.attach(dataChannel)
+    }
 }
 
 private func signalingStateName(_ state: LKRTCSignalingState) -> String {

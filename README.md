@@ -8,17 +8,16 @@ It includes:
 - a local HTTP signaling endpoint hosted by the agent
 - a LiveKitWebRTC peer in the agent that publishes the captured screen as video
 - a Vite React web client that connects with browser-native WebRTC and renders the stream in a `<video>` element
-
-Keyboard and mouse control are intentionally not implemented yet.
+- a WebRTC DataChannel control path for mouse, wheel, and keyboard input
 
 ## Project Structure
 
 ```text
 apps/
-  mac-agent/      SwiftUI macOS app, ScreenCaptureKit capture, signaling, WebRTC transport
-  web-client/     Vite React browser client
+  mac-agent/      SwiftUI macOS app, ScreenCaptureKit capture, signaling, WebRTC transport, input injection
+  web-client/     Vite React browser client and normalized input capture
 packages/
-  protocol/       Shared TypeScript protocol contracts for signaling
+  protocol/       Shared TypeScript protocol contracts for signaling and control messages
 docs/
   development.md
   permissions.md
@@ -53,6 +52,8 @@ The agent opens a SwiftUI status window and starts the signaling server on `http
 
 Grant Screen Recording permission when prompted. If macOS does not show a prompt, open System Settings and enable Screen Recording for **macvm Agent**, then restart the app.
 
+Grant Accessibility permission before using remote input. In System Settings, enable Accessibility for **macvm Agent**, then restart or refresh the agent status window.
+
 Start the web client:
 
 ```sh
@@ -65,9 +66,9 @@ Open the Vite URL from another machine on the same network. Enter the Mac agent 
 http://<mac-lan-ip>:8080
 ```
 
-Click **Connect**. The browser creates a WebRTC offer, sends it to the agent, receives an answer, exchanges ICE candidates through the agent's minimal HTTP endpoints, and renders the Mac screen in the video element.
+Click **Connect**. The browser creates a WebRTC offer, opens a `macvm-control` DataChannel, sends the offer to the agent, receives an answer, exchanges ICE candidates through the agent's minimal HTTP endpoints, and renders the Mac screen in the video element. Once the control channel reports `open`, pointer, wheel, and keyboard events over the remote video surface are sent as normalized protocol messages and injected by the Mac agent.
 
-This MVP is local-network development infrastructure with no input control. Do not expose it to the public internet.
+This MVP is local-network development infrastructure. Do not expose it to the public internet.
 
 ## Verify
 
@@ -102,6 +103,8 @@ For an active stream, `media` should show frame flow all the way through the sen
 
 The browser also shows a small Media Diagnostics panel. A healthy stream shows a live remote track, decoded frames, and non-zero video dimensions.
 
+For input, `/api/health` should include `accessibilityAllowed: true` and a `control` object. During an active controlled session, `control.channelState` should become `open`, `receivedMessages` should increase as input is captured, and `injectedEvents` should increase when Accessibility permission allows injection.
+
 ## Minimal Flow
 
 1. Mac agent launches and checks Screen Recording permission.
@@ -110,3 +113,5 @@ The browser also shows a small Media Diagnostics panel. A healthy stream shows a
 4. Agent starts ScreenCaptureKit capture, attaches the screen track to the negotiated video transceiver, and returns an answer.
 5. Browser and agent exchange ICE candidates over HTTP.
 6. Browser receives the remote video track and renders the Mac display.
+7. Browser sends normalized input messages over the WebRTC DataChannel.
+8. Agent maps normalized coordinates to the captured display and injects input through CoreGraphics.

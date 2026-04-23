@@ -1,8 +1,8 @@
 # Signaling Protocol
 
-The first MVP uses minimal HTTP signaling hosted by the Mac agent.
+The MVP uses minimal HTTP signaling hosted by the Mac agent for session setup. Input control uses a WebRTC DataChannel on the same peer connection.
 
-This protocol is intended for local-network MVP development and currently carries media signaling only. Input/control signaling is not implemented yet.
+This protocol is intended for local-network MVP development. It is not hardened for public internet exposure.
 
 All responses include CORS headers for Vite/dev-server origins:
 
@@ -30,9 +30,24 @@ Response:
   "status": "ok",
   "activeSession": false,
   "screenRecordingAllowed": true,
+  "accessibilityAllowed": true,
   "sessionStatus": "Waiting for viewer",
   "serverStatus": "Listening on :8080",
-  "lastError": null
+  "lastError": null,
+  "media": {},
+  "control": {
+    "channelState": "none",
+    "accessibilityAllowed": true,
+    "receivedMessages": 0,
+    "injectedEvents": 0,
+    "resetCount": 0,
+    "pressedKeys": 0,
+    "pressedButtons": 0,
+    "lastMessageType": null,
+    "lastMappedX": null,
+    "lastMappedY": null,
+    "lastError": null
+  }
 }
 ```
 
@@ -40,6 +55,7 @@ Response:
 
 - `ok`
 - `permissionMissing`
+- `accessibilityMissing`
 - `captureFailed`
 - `negotiationFailed`
 - `serverFailed`
@@ -108,7 +124,99 @@ Response:
 
 Closes the active session.
 
-Input/control messages are not defined yet. The first version only negotiates media.
+The Mac agent also resets any pressed input state when a session closes.
+
+## WebRTC DataChannel: `macvm-control`
+
+The browser creates an ordered DataChannel named `macvm-control` before creating the SDP offer. The Mac agent accepts that channel through the negotiated WebRTC session. Control messages are UTF-8 JSON and include the shared protocol version, a stable message type, sequence, and browser timestamp.
+
+### `input.mouse.move`
+
+```json
+{
+  "version": 1,
+  "type": "input.mouse.move",
+  "sequence": 1,
+  "timestampMs": 1710000000000,
+  "x": 0.5,
+  "y": 0.5,
+  "buttons": []
+}
+```
+
+`x` and `y` are normalized to the actual visible video content rectangle, after browser-side letterbox/pillarbox handling.
+
+### `input.mouse.button`
+
+```json
+{
+  "version": 1,
+  "type": "input.mouse.button",
+  "sequence": 2,
+  "timestampMs": 1710000000001,
+  "button": "left",
+  "action": "down",
+  "x": 0.5,
+  "y": 0.5,
+  "buttons": ["left"]
+}
+```
+
+`button` is `left` or `right`; `action` is `down` or `up`.
+
+### `input.mouse.wheel`
+
+```json
+{
+  "version": 1,
+  "type": "input.mouse.wheel",
+  "sequence": 3,
+  "timestampMs": 1710000000002,
+  "deltaX": 0,
+  "deltaY": 120,
+  "x": 0.5,
+  "y": 0.5
+}
+```
+
+Wheel deltas are normalized to pixel units on the browser side before sending.
+
+### `input.keyboard.key`
+
+```json
+{
+  "version": 1,
+  "type": "input.keyboard.key",
+  "sequence": 4,
+  "timestampMs": 1710000000003,
+  "action": "down",
+  "code": "KeyA",
+  "key": "a",
+  "modifiers": {
+    "shift": false,
+    "control": false,
+    "alt": false,
+    "meta": false
+  },
+  "repeat": false
+}
+```
+
+The first keyboard implementation prioritizes common physical `KeyboardEvent.code` values, control keys, arrows, and modifiers. It does not claim full IME or keyboard-layout coverage.
+
+### `input.reset`
+
+```json
+{
+  "version": 1,
+  "type": "input.reset",
+  "sequence": 5,
+  "timestampMs": 1710000000004,
+  "reason": "disconnect"
+}
+```
+
+The browser sends reset on blur, visibility changes, reconnect, and disconnect. The Mac agent also clears pressed state when the session ends.
 
 ## Error Responses
 
@@ -128,6 +236,7 @@ Known error codes include:
 
 - `capture_failed`
 - `invalid_ice_candidate`
+- `invalid_input`
 - `invalid_json`
 - `invalid_offer`
 - `negotiation_failed`

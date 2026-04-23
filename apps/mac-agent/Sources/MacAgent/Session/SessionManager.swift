@@ -28,6 +28,10 @@ final class SessionManager {
         return diagnostics
     }
 
+    var controlDiagnostics: ControlDiagnostics {
+        activeSession?.webRTCSession.controlDiagnostics ?? .empty
+    }
+
     var healthStatus: String {
         if !ScreenRecordingPermission.isGranted {
             return "permissionMissing"

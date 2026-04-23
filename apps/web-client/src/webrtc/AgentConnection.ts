@@ -1,6 +1,7 @@
 import {
   AddIceCandidateRequest,
   AgentErrorCode,
+  ControlMessage,
   CreateSessionRequest,
   CreateSessionResponse,
   HealthResponse,
@@ -19,6 +20,8 @@ export type ConnectionState =
   | "disconnected"
   | "failed";
 
+export type ControlChannelState = "none" | "connecting" | "open" | "closing" | "closed";
+
 export interface AgentConnectionEvents {
   onDiagnostics: (diagnostics: ConnectionDiagnostics) => void;
   onRemoteStream: (stream: MediaStream) => void;
@@ -27,6 +30,7 @@ export interface AgentConnectionEvents {
 }
 
 export interface ConnectionDiagnostics {
+  controlChannelState: ControlChannelState;
   connectionState: RTCPeerConnectionState | "none";
   iceConnectionState: RTCIceConnectionState | "none";
   signalingState: RTCSignalingState | "none";
@@ -47,6 +51,7 @@ export class AgentConnection {
   private pendingLocalCandidates: RTCIceCandidate[] = [];
   private peer: RTCPeerConnection | undefined;
   private sessionId: string | undefined;
+  private controlChannel: RTCDataChannel | undefined;
 
   constructor(agentBaseUrl: string, events: AgentConnectionEvents) {
     this.agentBaseUrl = agentBaseUrl.replace(/\/$/, "");
@@ -64,6 +69,7 @@ export class AgentConnection {
     this.peer = peer;
 
     peer.addTransceiver("video", { direction: "recvonly" });
+    this.controlChannel = this.createControlChannel(peer);
 
     peer.ontrack = (event) => {
       const [stream] = event.streams;
@@ -142,6 +148,8 @@ export class AgentConnection {
     window.clearInterval(this.diagnosticsTimer);
     this.diagnosticsTimer = undefined;
 
+    this.sendReset("disconnect");
+
     if (this.sessionId) {
       try {
         await fetch(`${this.agentBaseUrl}/api/sessions/${this.sessionId}`, {
@@ -152,6 +160,8 @@ export class AgentConnection {
       }
     }
 
+    this.controlChannel?.close();
+    this.controlChannel = undefined;
     this.peer?.close();
     this.peer = undefined;
     this.sessionId = undefined;
@@ -160,6 +170,36 @@ export class AgentConnection {
     this.events.onStateChange("disconnected");
     this.emitDiagnostics();
     this.isDisconnecting = false;
+  }
+
+  sendControlMessage(message: ControlMessage): boolean {
+    if (!this.controlChannel || this.controlChannel.readyState !== "open") {
+      return false;
+    }
+
+    this.controlChannel.send(JSON.stringify(message));
+    return true;
+  }
+
+  private createControlChannel(peer: RTCPeerConnection): RTCDataChannel {
+    const channel = peer.createDataChannel("macvm-control", { ordered: true });
+    channel.onopen = () => this.emitDiagnostics();
+    channel.onclose = () => this.emitDiagnostics();
+    channel.onerror = () => {
+      this.events.onError("The input control channel reported an error.");
+      this.emitDiagnostics();
+    };
+    return channel;
+  }
+
+  private sendReset(reason: "disconnect" | "reconnect" | "manual"): void {
+    this.sendControlMessage({
+      version: PROTOCOL_VERSION,
+      type: "input.reset",
+      sequence: 0,
+      timestampMs: Date.now(),
+      reason,
+    });
   }
 
   private startIcePolling(): void {
@@ -219,6 +259,7 @@ export class AgentConnection {
     const peer = this.peer;
     if (!peer) {
       this.events.onDiagnostics({
+        controlChannelState: "none",
         connectionState: "none",
         iceConnectionState: "none",
         signalingState: "none",
@@ -234,6 +275,7 @@ export class AgentConnection {
     const receivers = peer.getReceivers();
     const videoReceiver = receivers.find((receiver) => receiver.track?.kind === "video");
     const diagnostics: ConnectionDiagnostics = {
+      controlChannelState: this.controlChannel?.readyState ?? "none",
       connectionState: peer.connectionState,
       iceConnectionState: peer.iceConnectionState,
       signalingState: peer.signalingState,

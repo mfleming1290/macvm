@@ -2,10 +2,12 @@ import Foundation
 
 @MainActor
 final class AgentAppState: ObservableObject {
+    @Published var accessibilityAllowed = AccessibilityPermission.isGranted
     @Published var screenRecordingAllowed = ScreenRecordingPermission.isGranted
     @Published var serverStatus = "Starting"
     @Published var sessionStatus = "Waiting for viewer"
     @Published var localAddressHint = "localhost"
+    @Published var controlDiagnostics = ControlDiagnostics.empty
     @Published var mediaDiagnostics = MediaDiagnostics.empty
 
     private let sessionManager: SessionManager
@@ -42,6 +44,7 @@ final class AgentAppState: ObservableObject {
     }
 
     func refreshPermissionStatus() {
+        accessibilityAllowed = AccessibilityPermission.isGranted
         screenRecordingAllowed = ScreenRecordingPermission.isGranted
     }
 
@@ -50,9 +53,15 @@ final class AgentAppState: ObservableObject {
         refreshPermissionStatus()
     }
 
+    func requestAccessibilityPermission() {
+        AccessibilityPermission.request()
+        refreshPermissionStatus()
+    }
+
     private func refreshMediaDiagnosticsLoop() async {
         while !Task.isCancelled {
             mediaDiagnostics = sessionManager.mediaDiagnostics
+            controlDiagnostics = sessionManager.controlDiagnostics
             try? await Task.sleep(for: .seconds(1))
         }
     }

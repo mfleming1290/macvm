@@ -28,10 +28,12 @@ final class ProtocolCodingTests: XCTestCase {
             status: "permissionMissing",
             activeSession: false,
             screenRecordingAllowed: false,
+            accessibilityAllowed: false,
             sessionStatus: "Permission missing",
             serverStatus: "Listening on :8080",
             lastError: "Screen Recording permission is required before starting a stream.",
-            media: .empty
+            media: .empty,
+            control: .empty
         )
 
         let data = try JSONEncoder().encode(response)
@@ -48,10 +50,12 @@ final class ProtocolCodingTests: XCTestCase {
             status: "ok",
             activeSession: false,
             screenRecordingAllowed: true,
+            accessibilityAllowed: true,
             sessionStatus: "Waiting for viewer",
             serverStatus: "Listening on :8080",
             lastError: nil,
-            media: .empty
+            media: .empty,
+            control: .empty
         )
 
         let json = String(data: try JSONEncoder().encode(response), encoding: .utf8)

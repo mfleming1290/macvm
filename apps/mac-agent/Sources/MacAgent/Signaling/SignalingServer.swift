@@ -127,10 +127,12 @@ final class SignalingServer {
                     status: sessionManager.healthStatus,
                     activeSession: sessionManager.hasActiveSession,
                     screenRecordingAllowed: ScreenRecordingPermission.isGranted,
+                    accessibilityAllowed: AccessibilityPermission.isGranted,
                     sessionStatus: sessionManager.status,
                     serverStatus: "Listening on :\(port)",
                     lastError: sessionManager.lastError,
-                    media: sessionManager.mediaDiagnostics
+                    media: sessionManager.mediaDiagnostics,
+                    control: sessionManager.controlDiagnostics
                 )
             )
         }

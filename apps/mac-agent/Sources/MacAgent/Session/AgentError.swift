@@ -3,6 +3,7 @@ import Foundation
 enum AgentError: LocalizedError {
     case captureFailed(String)
     case invalidIceCandidate
+    case invalidInput
     case invalidJSON
     case invalidOffer
     case negotiationFailed(String)
@@ -17,6 +18,8 @@ enum AgentError: LocalizedError {
             "capture_failed"
         case .invalidIceCandidate:
             "invalid_ice_candidate"
+        case .invalidInput:
+            "invalid_input"
         case .invalidJSON:
             "invalid_json"
         case .invalidOffer:
@@ -36,7 +39,7 @@ enum AgentError: LocalizedError {
 
     var statusCode: Int {
         switch self {
-        case .invalidIceCandidate, .invalidJSON, .invalidOffer, .unsupportedProtocolVersion:
+        case .invalidIceCandidate, .invalidInput, .invalidJSON, .invalidOffer, .unsupportedProtocolVersion:
             400
         case .permissionMissing:
             403
@@ -53,6 +56,8 @@ enum AgentError: LocalizedError {
             "Screen capture failed: \(message)"
         case .invalidIceCandidate:
             "The ICE candidate is missing or invalid."
+        case .invalidInput:
+            "The input control message is missing or invalid."
         case .invalidJSON:
             "The request body is not valid JSON for this endpoint."
         case .invalidOffer:
