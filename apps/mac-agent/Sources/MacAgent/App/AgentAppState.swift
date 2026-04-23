@@ -6,6 +6,7 @@ final class AgentAppState: ObservableObject {
     @Published var serverStatus = "Starting"
     @Published var sessionStatus = "Waiting for viewer"
     @Published var localAddressHint = "localhost"
+    @Published var mediaDiagnostics = MediaDiagnostics.empty
 
     private let sessionManager: SessionManager
     private var signalingServer: SignalingServer?
@@ -36,6 +37,8 @@ final class AgentAppState: ObservableObject {
         } catch {
             serverStatus = "Failed: \(error.localizedDescription)"
         }
+
+        await refreshMediaDiagnosticsLoop()
     }
 
     func refreshPermissionStatus() {
@@ -45,5 +48,12 @@ final class AgentAppState: ObservableObject {
     func requestScreenRecordingPermission() {
         ScreenRecordingPermission.request()
         refreshPermissionStatus()
+    }
+
+    private func refreshMediaDiagnosticsLoop() async {
+        while !Task.isCancelled {
+            mediaDiagnostics = sessionManager.mediaDiagnostics
+            try? await Task.sleep(for: .seconds(1))
+        }
     }
 }

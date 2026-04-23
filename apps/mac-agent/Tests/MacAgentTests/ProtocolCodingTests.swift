@@ -30,7 +30,8 @@ final class ProtocolCodingTests: XCTestCase {
             screenRecordingAllowed: false,
             sessionStatus: "Permission missing",
             serverStatus: "Listening on :8080",
-            lastError: "Screen Recording permission is required before starting a stream."
+            lastError: "Screen Recording permission is required before starting a stream.",
+            media: .empty
         )
 
         let data = try JSONEncoder().encode(response)
@@ -49,12 +50,22 @@ final class ProtocolCodingTests: XCTestCase {
             screenRecordingAllowed: true,
             sessionStatus: "Waiting for viewer",
             serverStatus: "Listening on :8080",
-            lastError: nil
+            lastError: nil,
+            media: .empty
         )
 
         let json = String(data: try JSONEncoder().encode(response), encoding: .utf8)
 
         XCTAssertTrue(json?.contains(#""lastError":null"#) == true)
+    }
+
+    func testMediaDiagnosticsEncodesNilFrameFieldsAsNull() throws {
+        let json = String(data: try JSONEncoder().encode(MediaDiagnostics.empty), encoding: .utf8)
+
+        XCTAssertTrue(json?.contains(#""lastFrameWidth":null"#) == true)
+        XCTAssertTrue(json?.contains(#""lastFrameHeight":null"#) == true)
+        XCTAssertTrue(json?.contains(#""lastPixelFormat":null"#) == true)
+        XCTAssertTrue(json?.contains(#""lastTimestampNs":null"#) == true)
     }
 
     func testIceCandidateValidationRejectsEmptyCandidates() {

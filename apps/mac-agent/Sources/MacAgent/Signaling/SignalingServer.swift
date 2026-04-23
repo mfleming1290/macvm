@@ -129,7 +129,8 @@ final class SignalingServer {
                     screenRecordingAllowed: ScreenRecordingPermission.isGranted,
                     sessionStatus: sessionManager.status,
                     serverStatus: "Listening on :\(port)",
-                    lastError: sessionManager.lastError
+                    lastError: sessionManager.lastError,
+                    media: sessionManager.mediaDiagnostics
                 )
             )
         }

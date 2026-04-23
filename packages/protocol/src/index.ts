@@ -61,6 +61,25 @@ export interface HealthResponse {
   sessionStatus: string;
   serverStatus: string;
   lastError: string | null;
+  media: MediaDiagnostics;
+}
+
+export interface MediaDiagnostics {
+  captureFrames: number;
+  completeFrames: number;
+  droppedFrames: number;
+  capturerFrames: number;
+  sourceFrames: number;
+  lastFrameWidth: number | null;
+  lastFrameHeight: number | null;
+  lastPixelFormat: string | null;
+  lastTimestampNs: number | null;
+  senderAttached: boolean;
+  senderTrackEnabled: boolean;
+  senderTrackReadyState: string;
+  localCandidates: number;
+  signalingState: string;
+  iceConnectionState: string;
 }
 
 export interface ErrorResponse {
@@ -83,7 +102,8 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
     typeof value.screenRecordingAllowed === "boolean" &&
     typeof value.sessionStatus === "string" &&
     typeof value.serverStatus === "string" &&
-    (typeof value.lastError === "string" || value.lastError === null)
+    (typeof value.lastError === "string" || value.lastError === null) &&
+    isMediaDiagnostics(value.media)
   );
 }
 
@@ -128,6 +148,27 @@ function isIceCandidate(value: unknown): value is IceCandidateMessage {
     typeof value.candidate === "string" &&
     (typeof value.sdpMid === "string" || value.sdpMid === null) &&
     (typeof value.sdpMLineIndex === "number" || value.sdpMLineIndex === null)
+  );
+}
+
+function isMediaDiagnostics(value: unknown): value is MediaDiagnostics {
+  return (
+    isRecord(value) &&
+    typeof value.captureFrames === "number" &&
+    typeof value.completeFrames === "number" &&
+    typeof value.droppedFrames === "number" &&
+    typeof value.capturerFrames === "number" &&
+    typeof value.sourceFrames === "number" &&
+    (typeof value.lastFrameWidth === "number" || value.lastFrameWidth === null) &&
+    (typeof value.lastFrameHeight === "number" || value.lastFrameHeight === null) &&
+    (typeof value.lastPixelFormat === "string" || value.lastPixelFormat === null) &&
+    (typeof value.lastTimestampNs === "number" || value.lastTimestampNs === null) &&
+    typeof value.senderAttached === "boolean" &&
+    typeof value.senderTrackEnabled === "boolean" &&
+    typeof value.senderTrackReadyState === "string" &&
+    typeof value.localCandidates === "number" &&
+    typeof value.signalingState === "string" &&
+    typeof value.iceConnectionState === "string"
   );
 }
 

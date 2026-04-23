@@ -85,11 +85,28 @@ curl http://127.0.0.1:8080/api/health
 
 The response should be JSON with `status: "ok"` when Screen Recording is granted.
 
+For an active stream, `media` should show frame flow all the way through the sender:
+
+```json
+{
+  "captureFrames": 244,
+  "completeFrames": 244,
+  "capturerFrames": 244,
+  "sourceFrames": 244,
+  "senderAttached": true,
+  "senderTrackReadyState": "live",
+  "lastFrameWidth": 1920,
+  "lastFrameHeight": 1080
+}
+```
+
+The browser also shows a small Media Diagnostics panel. A healthy stream shows a live remote track, decoded frames, and non-zero video dimensions.
+
 ## Minimal Flow
 
 1. Mac agent launches and checks Screen Recording permission.
 2. Browser clicks connect and creates a WebRTC offer.
 3. Browser sends the offer to `POST /api/sessions`.
-4. Agent creates a WebRTC peer, starts ScreenCaptureKit capture, and returns an answer.
+4. Agent starts ScreenCaptureKit capture, attaches the screen track to the negotiated video transceiver, and returns an answer.
 5. Browser and agent exchange ICE candidates over HTTP.
 6. Browser receives the remote video track and renders the Mac display.

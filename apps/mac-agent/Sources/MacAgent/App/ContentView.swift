@@ -30,6 +30,8 @@ struct ContentView: View {
                 isHealthy: appState.sessionStatus == "Streaming"
             )
 
+            DiagnosticsView(diagnostics: appState.mediaDiagnostics)
+
             HStack {
                 Button("Request Screen Recording Permission") {
                     appState.requestScreenRecordingPermission()
@@ -45,6 +47,50 @@ struct ContentView: View {
         }
         .padding(28)
         .frame(width: 560, alignment: .leading)
+    }
+}
+
+private struct DiagnosticsView: View {
+    let diagnostics: MediaDiagnostics
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
+            GridRow {
+                Text("Capture")
+                    .fontWeight(.semibold)
+                Text("\(diagnostics.completeFrames)/\(diagnostics.captureFrames) complete, \(diagnostics.droppedFrames) dropped")
+                    .foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Bridge")
+                    .fontWeight(.semibold)
+                Text("\(diagnostics.capturerFrames) capturer frames, \(diagnostics.sourceFrames) source frames")
+                    .foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Frame")
+                    .fontWeight(.semibold)
+                Text(frameDescription)
+                    .foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Sender")
+                    .fontWeight(.semibold)
+                Text("\(diagnostics.senderAttached ? "attached" : "missing"), track \(diagnostics.senderTrackReadyState), ICE \(diagnostics.iceConnectionState)")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption.monospacedDigit())
+        .padding(12)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var frameDescription: String {
+        guard let width = diagnostics.lastFrameWidth, let height = diagnostics.lastFrameHeight else {
+            return "none"
+        }
+
+        return "\(width)x\(height) \(diagnostics.lastPixelFormat ?? "unknown")"
     }
 }
 

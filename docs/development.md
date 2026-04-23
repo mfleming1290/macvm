@@ -42,6 +42,30 @@ The code is split by responsibility:
 - `Permissions/` owns Screen Recording permission checks.
 - `Session/` owns one-viewer session state.
 
+## Media Pipeline Diagnostics
+
+The Phase 1 stream has diagnostics on both sides so black-video failures can be localized instead of guessed.
+
+Agent-side `/api/health` includes:
+
+- `captureFrames`: ScreenCaptureKit sample buffers received.
+- `completeFrames`: ScreenCaptureKit frames with complete frame status.
+- `droppedFrames`: incomplete or invalid ScreenCaptureKit frames filtered out.
+- `capturerFrames`: frames handed to the custom LiveKitWebRTC capturer.
+- `sourceFrames`: frames handed through the WebRTC video source path.
+- `senderAttached`: whether the WebRTC sender/transceiver has the screen track.
+- `senderTrackReadyState`: expected to be `live` while streaming.
+- `lastFrameWidth`, `lastFrameHeight`, `lastPixelFormat`: latest captured frame shape.
+
+Browser-side diagnostics show:
+
+- peer connection and ICE state
+- remote video track state
+- inbound decoded frame count and dimensions when browser stats expose them
+- video element `readyState`, dimensions, and playback state
+
+For the current LiveKitWebRTC answerer path, the Mac agent starts ScreenCaptureKit first, configures a screencast `RTCVideoSource`, binds the video track to the browser offer's negotiated video transceiver as `sendOnly`, then creates the answer. Avoid moving the video sender setup back to a separate pre-offer `addTrack` path unless you re-verify Safari/Chrome negotiation and decoded frame dimensions.
+
 ## Verification
 
 Run these before considering the MVP healthy:
@@ -58,7 +82,10 @@ Manual verification requires a Mac with Screen Recording permission granted:
 2. Permission grant: click the permission button if needed, grant Screen Recording to **macvm Agent** in System Settings, then restart the app.
 3. Health check: run `curl http://127.0.0.1:8080/api/health` and confirm JSON includes `status: "ok"` and `screenRecordingAllowed: true`.
 4. Successful stream: start the web client with `npm run dev:web`, open it from another machine or browser profile, connect to `http://<mac-lan-ip>:8080`, and confirm live video appears.
-5. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
-6. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
-7. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing.
-8. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.
+5. Frame-flow proof: while connected, confirm `/api/health` has increasing `captureFrames`, `completeFrames`, `capturerFrames`, and `sourceFrames`, with `senderAttached: true` and `senderTrackReadyState: "live"`.
+6. Browser decode proof: confirm the Media Diagnostics panel reports a live remote track and non-zero video element dimensions.
+7. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
+8. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
+9. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
+10. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing.
+11. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.

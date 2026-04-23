@@ -147,6 +147,37 @@ button.secondary {
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 3%), 0 24px 90px rgb(0 0 0 / 36%);
 }
 
+.debug-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 18px;
+  background: rgb(22 18 14 / 72%);
+}
+
+.debug-panel h2 {
+  margin: 0;
+  color: #d7a94f;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.debug-grid {
+  display: grid;
+  grid-template-columns: repeat(6, auto);
+  gap: 8px 12px;
+  align-items: center;
+  color: #bdb4a6;
+  font-size: 0.82rem;
+}
+
+.debug-grid strong {
+  color: #f4f1ea;
+  font-weight: 600;
+}
+
 video {
   width: 100%;
   height: 100%;
@@ -161,7 +192,8 @@ video {
   }
 
   .connection-panel,
-  .form-row {
+  .form-row,
+  .debug-grid {
     grid-template-columns: 1fr;
   }
 

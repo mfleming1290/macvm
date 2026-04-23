@@ -47,6 +47,7 @@ struct HealthResponse: Codable {
     let sessionStatus: String
     let serverStatus: String
     let lastError: String?
+    let media: MediaDiagnostics
 
     enum CodingKeys: String, CodingKey {
         case version
@@ -56,6 +57,7 @@ struct HealthResponse: Codable {
         case sessionStatus
         case serverStatus
         case lastError
+        case media
     }
 
     func encode(to encoder: Encoder) throws {
@@ -67,6 +69,7 @@ struct HealthResponse: Codable {
         try container.encode(sessionStatus, forKey: .sessionStatus)
         try container.encode(serverStatus, forKey: .serverStatus)
         try container.encode(lastError, forKey: .lastError)
+        try container.encode(media, forKey: .media)
     }
 }
 

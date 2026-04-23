@@ -1,5 +1,6 @@
 import {
   AddIceCandidateRequest,
+  AgentErrorCode,
   CreateSessionRequest,
   CreateSessionResponse,
   HealthResponse,
@@ -19,14 +20,27 @@ export type ConnectionState =
   | "failed";
 
 export interface AgentConnectionEvents {
+  onDiagnostics: (diagnostics: ConnectionDiagnostics) => void;
   onRemoteStream: (stream: MediaStream) => void;
   onStateChange: (state: ConnectionState) => void;
   onError: (message: string) => void;
 }
 
+export interface ConnectionDiagnostics {
+  connectionState: RTCPeerConnectionState | "none";
+  iceConnectionState: RTCIceConnectionState | "none";
+  signalingState: RTCSignalingState | "none";
+  remoteTrackCount: number;
+  remoteVideoTrackState: string;
+  inboundFramesDecoded: number | null;
+  inboundFrameWidth: number | null;
+  inboundFrameHeight: number | null;
+}
+
 export class AgentConnection {
   private readonly agentBaseUrl: string;
   private readonly events: AgentConnectionEvents;
+  private diagnosticsTimer: number | undefined;
   private icePollTimer: number | undefined;
   private iceCursor = 0;
   private isDisconnecting = false;
@@ -53,6 +67,7 @@ export class AgentConnection {
 
     peer.ontrack = (event) => {
       const [stream] = event.streams;
+      this.emitDiagnostics();
       if (stream) {
         this.events.onRemoteStream(stream);
       }
@@ -71,6 +86,15 @@ export class AgentConnection {
       if (peer.connectionState === "closed" && !this.isDisconnecting) {
         this.events.onStateChange("failed");
       }
+      this.emitDiagnostics();
+    };
+
+    peer.oniceconnectionstatechange = () => {
+      this.emitDiagnostics();
+    };
+
+    peer.onsignalingstatechange = () => {
+      this.emitDiagnostics();
     };
 
     peer.onicecandidate = (event) => {
@@ -104,7 +128,8 @@ export class AgentConnection {
       this.sessionId = response.sessionId;
       await peer.setRemoteDescription(response.answer);
       await this.flushPendingLocalCandidates();
-      this.startIcePolling();
+      this.startStatsPolling();
+      this.emitDiagnostics();
     } catch (error) {
       await this.disconnect();
       throw error;
@@ -113,8 +138,9 @@ export class AgentConnection {
 
   async disconnect(): Promise<void> {
     this.isDisconnecting = true;
-    window.clearInterval(this.icePollTimer);
-    this.icePollTimer = undefined;
+    this.stopIcePolling();
+    window.clearInterval(this.diagnosticsTimer);
+    this.diagnosticsTimer = undefined;
 
     if (this.sessionId) {
       try {
@@ -132,14 +158,30 @@ export class AgentConnection {
     this.iceCursor = 0;
     this.pendingLocalCandidates = [];
     this.events.onStateChange("disconnected");
+    this.emitDiagnostics();
     this.isDisconnecting = false;
   }
 
   private startIcePolling(): void {
+    this.stopIcePolling();
     this.icePollTimer = window.setInterval(() => {
       void this.pollAgentIce();
     }, 500);
     void this.pollAgentIce();
+  }
+
+  private startStatsPolling(): void {
+    this.startIcePolling();
+    window.clearInterval(this.diagnosticsTimer);
+    this.diagnosticsTimer = window.setInterval(() => {
+      void this.emitDiagnostics();
+    }, 500);
+    void this.emitDiagnostics();
+  }
+
+  private stopIcePolling(): void {
+    window.clearInterval(this.icePollTimer);
+    this.icePollTimer = undefined;
   }
 
   private async pollAgentIce(): Promise<void> {
@@ -158,8 +200,64 @@ export class AgentConnection {
         await this.peer.addIceCandidate(candidate);
       }
     } catch (error) {
+      if (error instanceof AgentRequestError && error.code === "session_not_found") {
+        this.sessionId = undefined;
+        this.stopIcePolling();
+
+        if (this.peer.connectionState !== "connected") {
+          this.events.onStateChange("failed");
+          this.events.onError(error.message);
+        }
+        return;
+      }
+
       this.events.onError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  private async emitDiagnostics(): Promise<void> {
+    const peer = this.peer;
+    if (!peer) {
+      this.events.onDiagnostics({
+        connectionState: "none",
+        iceConnectionState: "none",
+        signalingState: "none",
+        remoteTrackCount: 0,
+        remoteVideoTrackState: "none",
+        inboundFramesDecoded: null,
+        inboundFrameWidth: null,
+        inboundFrameHeight: null,
+      });
+      return;
+    }
+
+    const receivers = peer.getReceivers();
+    const videoReceiver = receivers.find((receiver) => receiver.track?.kind === "video");
+    const diagnostics: ConnectionDiagnostics = {
+      connectionState: peer.connectionState,
+      iceConnectionState: peer.iceConnectionState,
+      signalingState: peer.signalingState,
+      remoteTrackCount: receivers.filter((receiver) => receiver.track).length,
+      remoteVideoTrackState: videoReceiver?.track.readyState ?? "none",
+      inboundFramesDecoded: null,
+      inboundFrameWidth: null,
+      inboundFrameHeight: null,
+    };
+
+    if (videoReceiver) {
+      const stats = await videoReceiver.getStats();
+      for (const report of stats.values()) {
+        if (report.type !== "inbound-rtp" || report.kind !== "video") {
+          continue;
+        }
+
+        diagnostics.inboundFramesDecoded = typeof report.framesDecoded === "number" ? report.framesDecoded : null;
+        diagnostics.inboundFrameWidth = typeof report.frameWidth === "number" ? report.frameWidth : null;
+        diagnostics.inboundFrameHeight = typeof report.frameHeight === "number" ? report.frameHeight : null;
+      }
+    }
+
+    this.events.onDiagnostics(diagnostics);
   }
 
   private async sendIceCandidate(candidate: RTCIceCandidate): Promise<void> {
@@ -266,12 +364,24 @@ export class AgentConnection {
     if (contentType.includes("application/json")) {
       const value: unknown = await response.json();
       if (isErrorResponse(value)) {
-        throw new Error(value.error.message);
+        throw new AgentRequestError(response.status, value.error.code, value.error.message);
       }
       throw new Error(`The Mac agent returned an unsupported error response (${response.status}).`);
     }
 
     const message = await response.text();
     throw new Error(message || `Agent request failed: ${response.status}`);
+  }
+}
+
+class AgentRequestError extends Error {
+  readonly code: AgentErrorCode;
+  readonly status: number;
+
+  constructor(status: number, code: AgentErrorCode, message: string) {
+    super(message);
+    this.name = "AgentRequestError";
+    this.status = status;
+    this.code = code;
   }
 }

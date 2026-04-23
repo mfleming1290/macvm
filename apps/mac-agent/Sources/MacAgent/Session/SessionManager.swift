@@ -12,6 +12,22 @@ final class SessionManager {
         activeSession != nil
     }
 
+    var mediaDiagnostics: MediaDiagnostics {
+        var diagnostics = captureService.diagnostics
+        if let webRTCDiagnostics = activeSession?.webRTCSession.diagnostics {
+            diagnostics.capturerFrames = webRTCDiagnostics.capturerFrames
+            diagnostics.sourceFrames = webRTCDiagnostics.sourceFrames
+            diagnostics.lastTimestampNs = webRTCDiagnostics.lastTimestampNs
+            diagnostics.senderAttached = webRTCDiagnostics.senderAttached
+            diagnostics.senderTrackEnabled = webRTCDiagnostics.senderTrackEnabled
+            diagnostics.senderTrackReadyState = webRTCDiagnostics.senderTrackReadyState
+            diagnostics.localCandidates = webRTCDiagnostics.localCandidates
+            diagnostics.signalingState = webRTCDiagnostics.signalingState
+            diagnostics.iceConnectionState = webRTCDiagnostics.iceConnectionState
+        }
+        return diagnostics
+    }
+
     var healthStatus: String {
         if !ScreenRecordingPermission.isGranted {
             return "permissionMissing"
@@ -47,9 +63,9 @@ final class SessionManager {
         }
 
         do {
-            let answer = try await webRTCSession.createAnswer(for: offer)
+            let captureConfiguration: CaptureConfiguration
             do {
-                try await captureService.start()
+                captureConfiguration = try await captureService.start()
             } catch {
                 await closeActiveSession()
                 let message = error.localizedDescription
@@ -57,6 +73,10 @@ final class SessionManager {
                 throw AgentError.captureFailed(message)
             }
 
+            let answer = try await webRTCSession.createAnswer(
+                for: offer,
+                captureConfiguration: captureConfiguration
+            )
             setStatus("Streaming")
             return CreateSessionResponse(
                 version: protocolVersion,
