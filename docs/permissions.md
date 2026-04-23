@@ -19,6 +19,22 @@ com.matt.macvm.agent
 
 This matters because macOS privacy grants are tied to app identity. Avoid using `swift run MacAgent` as the primary runtime path for permission testing, because permission may attach to Terminal or another transient development host.
 
+For rebuild-to-rebuild permission persistence during development, also keep the code signature stable:
+
+```sh
+MACVM_CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" npm run build:agent-app
+```
+
+If `MACVM_CODESIGN_IDENTITY` is not set, the build script tries to auto-detect the first available Apple Development certificate. If none is available, it falls back to ad-hoc signing and prints that mode explicitly. In ad-hoc mode, Screen Recording and Accessibility permissions may need to be removed and re-added after rebuilds.
+
+To inspect the current signature:
+
+```sh
+codesign -dv --verbose=4 "apps/mac-agent/build/macvm Agent.app" 2>&1 | egrep 'Identifier=|Authority=|TeamIdentifier|Signature='
+```
+
+For persistent permissions, expect the same bundle identifier plus `Authority=Apple Development: ...` rather than `Signature=adhoc`.
+
 If capture fails:
 
 1. Open System Settings.

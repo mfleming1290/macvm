@@ -40,6 +40,14 @@ npm run build:agent-app
 
 The Mac agent depends on LiveKit's WebRTC XCFramework distributed through Swift Package Manager. The first resolve may take a while. The build command creates `apps/mac-agent/build/macvm Agent.app` with the stable bundle identifier `com.matt.macvm.agent`.
 
+For reliable Screen Recording and Accessibility permission persistence during development, sign the app with a stable Apple Development certificate:
+
+```sh
+MACVM_CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" npm run build:agent-app
+```
+
+If `MACVM_CODESIGN_IDENTITY` is not set, the build script will use the first available Apple Development identity from the local keychain. If none is available, it falls back to ad-hoc signing and prints that mode explicitly. Ad-hoc fallback is still useful for quick local builds, but macOS may require removing and re-adding permissions after rebuilds because the code signature is not tied to a stable developer identity.
+
 ## Run
 
 Start the macOS agent:
@@ -53,6 +61,14 @@ The agent opens a SwiftUI status window and starts the signaling server on `http
 Grant Screen Recording permission when prompted. If macOS does not show a prompt, open System Settings and enable Screen Recording for **macvm Agent**, then restart the app.
 
 Grant Accessibility permission before using remote input. In System Settings, enable Accessibility for **macvm Agent**, then restart or refresh the agent status window.
+
+To verify the built app identity after a build:
+
+```sh
+codesign -dv --verbose=4 "apps/mac-agent/build/macvm Agent.app" 2>&1 | egrep 'Identifier=|Authority=|TeamIdentifier=|Signature='
+```
+
+For persistent dev permissions, expect to see `Identifier=com.matt.macvm.agent` plus `Authority=Apple Development: ...`. If the output shows `Signature=adhoc`, the app is running in the explicit fallback mode.
 
 Start the web client:
 

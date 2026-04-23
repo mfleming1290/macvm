@@ -34,6 +34,40 @@ open "apps/mac-agent/build/macvm Agent.app"
 
 `swift run MacAgent` is still useful for quick compiler/runtime experiments, but it is not the primary runtime path because macOS privacy prompts may attach permission to Terminal or another transient host instead of the app.
 
+### Stable Development Signing
+
+The development app already has a stable bundle identifier and app path. For Screen Recording and Accessibility permission persistence, the remaining variable is the code signature used across rebuilds.
+
+Preferred build:
+
+```sh
+MACVM_CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" npm run build:agent-app
+```
+
+The build script also supports a direct flag:
+
+```sh
+apps/mac-agent/scripts/build-dev-app.sh --signing-identity "Apple Development: Your Name (TEAMID)"
+```
+
+If no identity is configured, the script tries to auto-detect the first available `Apple Development` certificate from the local keychain. If none is available, it falls back to ad-hoc signing and prints that mode explicitly. Ad-hoc fallback keeps local development unblocked, but permission persistence across rebuilds is not expected to be reliable in that mode.
+
+The build script now updates the existing `apps/mac-agent/build/macvm Agent.app` in place, signs `LiveKitWebRTC.framework`, signs the app bundle, and verifies the result.
+
+To inspect the current built app identity:
+
+```sh
+codesign -dv --verbose=4 "apps/mac-agent/build/macvm Agent.app" 2>&1 | egrep 'Identifier=|Authority=|TeamIdentifier=|Signature='
+```
+
+For stable development permissions, expect:
+
+- `Identifier=com.matt.macvm.agent`
+- `Authority=Apple Development: ...`
+- a non-empty `TeamIdentifier`
+
+If the output shows `Signature=adhoc`, the build is using the explicit fallback path.
+
 The code is split by responsibility:
 
 - `Capture/` owns ScreenCaptureKit setup and frame delivery.
@@ -113,22 +147,24 @@ npm run build:agent-app
 Manual verification requires a Mac with Screen Recording permission granted:
 
 1. First launch: run `npm run build:agent-app`, open `apps/mac-agent/build/macvm Agent.app`, and confirm the SwiftUI window shows signaling status.
-2. Permission grant: click the permission buttons if needed, grant Screen Recording and Accessibility to **macvm Agent** in System Settings, then restart the app or refresh status.
-3. Health check: run `curl http://127.0.0.1:8080/api/health` and confirm JSON includes `status: "ok"`, `screenRecordingAllowed: true`, and `accessibilityAllowed: true`.
-4. Successful stream: start the web client with `npm run dev:web`, open it from another machine or browser profile, connect to `http://<mac-lan-ip>:8080`, and confirm live video appears.
-5. Frame-flow proof: while connected, confirm `/api/health` has increasing `captureFrames`, `completeFrames`, `submittedFrames`, `sourceFrames`, and `capturerFrames`, with `targetFramesPerSecond: 30`, `senderAttached: true`, and `senderTrackReadyState: "live"`.
-6. Pacing proof: during normal motion, `submittedFrames` should grow more slowly than `captureFrames`, and some `droppedPacingFrames` are expected. During overload, `droppedBackpressureFrames` may increase, but it should not explode alongside growing end-to-end lag.
-7. Browser decode proof: confirm the Media Diagnostics panel reports a live remote track and non-zero video element dimensions.
-8. Viewport fit: confirm the full remote desktop is visible without page scrolling.
-9. Resize behavior: resize the browser and confirm the video remains centered, aspect-correct, and fully visible.
-10. Motion responsiveness: at 720p or 1080p, move windows quickly and confirm the session feels smoother and less laggy than before, without visible backlog buildup.
-11. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
-12. Input channel: confirm the browser diagnostics report control channel `open` after connection.
-13. Mouse input: move over the remote video, left click, right click, and scroll; confirm the Mac responds and `/api/health` shows increasing `control.receivedMessages` and `control.injectedEvents`.
-14. Mapping accuracy: click near all four corners and the center of the visible remote desktop, including after resizing the browser, and confirm the Mac pointer lands accurately.
-15. Keyboard input: focus a simple text field on the Mac through the remote session, type basic letters/numbers, press Enter/Escape/arrow keys, and verify a basic modifier shortcut such as Command+A.
-16. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
-17. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
-18. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
-19. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
-20. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.
+2. Signing check: confirm the build output reports an Apple Development identity, or explicitly says it is using the ad-hoc fallback mode.
+3. Permission grant: click the permission buttons if needed, grant Screen Recording and Accessibility to **macvm Agent** in System Settings, then restart the app or refresh status.
+4. Rebuild persistence: rebuild with the same Apple Development identity, relaunch the app, and confirm both permissions are still granted without removing and re-adding them.
+5. Health check: run `curl http://127.0.0.1:8080/api/health` and confirm JSON includes `status: "ok"`, `screenRecordingAllowed: true`, and `accessibilityAllowed: true`.
+6. Successful stream: start the web client with `npm run dev:web`, open it from another machine or browser profile, connect to `http://<mac-lan-ip>:8080`, and confirm live video appears.
+7. Frame-flow proof: while connected, confirm `/api/health` has increasing `captureFrames`, `completeFrames`, `submittedFrames`, `sourceFrames`, and `capturerFrames`, with `targetFramesPerSecond: 30`, `senderAttached: true`, and `senderTrackReadyState: "live"`.
+8. Pacing proof: during normal motion, `submittedFrames` should grow more slowly than `captureFrames`, and some `droppedPacingFrames` are expected. During overload, `droppedBackpressureFrames` may increase, but it should not explode alongside growing end-to-end lag.
+9. Browser decode proof: confirm the Media Diagnostics panel reports a live remote track and non-zero video element dimensions.
+10. Viewport fit: confirm the full remote desktop is visible without page scrolling.
+11. Resize behavior: resize the browser and confirm the video remains centered, aspect-correct, and fully visible.
+12. Motion responsiveness: at 720p or 1080p, move windows quickly and confirm the session feels smoother and less laggy than before, without visible backlog buildup.
+13. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
+14. Input channel: confirm the browser diagnostics report control channel `open` after connection.
+15. Mouse input: move over the remote video, left click, right click, and scroll; confirm the Mac responds and `/api/health` shows increasing `control.receivedMessages` and `control.injectedEvents`.
+16. Mapping accuracy: click near all four corners and the center of the visible remote desktop, including after resizing the browser, and confirm the Mac pointer lands accurately.
+17. Keyboard input: focus a simple text field on the Mac through the remote session, type basic letters/numbers, press Enter/Escape/arrow keys, and verify a basic modifier shortcut such as Command+A.
+18. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
+19. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
+20. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
+21. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
+22. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.

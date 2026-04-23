@@ -105,6 +105,7 @@ The stack currently has four active planes:
 - Swift
 - SwiftUI app lifecycle and status UI
 - generated development `.app` bundle with bundle identifier `com.matt.macvm.agent`
+- development build script supports stable Apple Development signing via `MACVM_CODESIGN_IDENTITY` or `--signing-identity`, with explicit ad-hoc fallback only when no stable identity is available
 - ScreenCaptureKit for screen capture
 - LiveKitWebRTC for native WebRTC media
 - Network.framework for the minimal local HTTP signaling server
@@ -162,6 +163,7 @@ Rules:
 - never assume permissions are already granted
 - use `apps/mac-agent/build/macvm Agent.app` as the primary development runtime path
 - keep the bundle identifier stable unless permission migration is explicitly planned
+- prefer a stable Apple Development signature for dev builds so TCC permissions persist across rebuilds; ad-hoc signing is fallback-only and must be documented clearly
 - expose permission state clearly in the app UI and logs
 - fail with actionable guidance when permissions are missing
 - keep permission logic centralized and testable
