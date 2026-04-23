@@ -66,8 +66,10 @@ The live architecture is:
 ```text
 apps/
   mac-agent/
+    Resources/
     Sources/
     Tests/
+    scripts/
   web-client/
     src/
     public/
@@ -101,6 +103,7 @@ The control plane is future work. When added, it must use normalized protocol me
 
 - Swift
 - SwiftUI app lifecycle and status UI
+- generated development `.app` bundle with bundle identifier `com.matt.macvm.agent`
 - ScreenCaptureKit for screen capture
 - LiveKitWebRTC for native WebRTC media
 - Network.framework for the minimal local HTTP signaling server
@@ -133,6 +136,8 @@ The Mac agent exposes:
 
 All JSON messages must include the shared protocol version where defined. Keep `docs/protocol.md` and `packages/protocol/src/index.ts` synchronized.
 
+Known failures should use versioned JSON error responses instead of plain text where practical.
+
 ## Security Rules
 
 The current MVP signaling endpoint is local-network development infrastructure for one viewer and no input control. Do not describe it as hardened internet-safe remote access.
@@ -161,6 +166,8 @@ Future input-control permission:
 Rules:
 
 - never assume permissions are already granted
+- use `apps/mac-agent/build/macvm Agent.app` as the primary development runtime path
+- keep the bundle identifier stable unless permission migration is explicitly planned
 - expose permission state clearly in the app UI and logs
 - fail with actionable guidance when permissions are missing
 - keep permission logic centralized and testable
@@ -195,6 +202,7 @@ Rules:
 First priorities:
 
 - protocol serialization/deserialization
+- CORS/preflight compatibility from the web dev-server origin
 - session state transitions
 - capture/signaling/WebRTC negotiation behavior
 - frontend build correctness
@@ -205,6 +213,7 @@ Add coordinate mapping, keyboard normalization, and stuck-key cleanup tests when
 Manual MVP verification:
 
 - the Mac agent launches cleanly
+- the generated app bundle launches cleanly
 - Screen Recording permission state is shown accurately
 - the browser can connect to the Mac agent
 - the browser receives a live view of the Mac display

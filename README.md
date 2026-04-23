@@ -36,24 +36,22 @@ npm install
 Resolve/build the Mac agent:
 
 ```sh
-cd apps/mac-agent
-swift build
+npm run build:agent-app
 ```
 
-The Mac agent depends on LiveKit's WebRTC XCFramework distributed through Swift Package Manager. The first resolve may take a while.
+The Mac agent depends on LiveKit's WebRTC XCFramework distributed through Swift Package Manager. The first resolve may take a while. The build command creates `apps/mac-agent/build/macvm Agent.app` with the stable bundle identifier `com.matt.macvm.agent`.
 
 ## Run
 
 Start the macOS agent:
 
 ```sh
-cd apps/mac-agent
-swift run MacAgent
+open "apps/mac-agent/build/macvm Agent.app"
 ```
 
 The agent opens a SwiftUI status window and starts the signaling server on `http://0.0.0.0:8080`.
 
-Grant Screen Recording permission when prompted. If macOS does not show a prompt, open System Settings and enable Screen Recording for the built app or terminal host used to launch it.
+Grant Screen Recording permission when prompted. If macOS does not show a prompt, open System Settings and enable Screen Recording for **macvm Agent**, then restart the app.
 
 Start the web client:
 
@@ -70,6 +68,22 @@ http://<mac-lan-ip>:8080
 Click **Connect**. The browser creates a WebRTC offer, sends it to the agent, receives an answer, exchanges ICE candidates through the agent's minimal HTTP endpoints, and renders the Mac screen in the video element.
 
 This MVP is local-network development infrastructure with no input control. Do not expose it to the public internet.
+
+## Verify
+
+```sh
+npm run build
+cd apps/mac-agent && swift test
+npm run build:agent-app
+```
+
+With the agent app running:
+
+```sh
+curl http://127.0.0.1:8080/api/health
+```
+
+The response should be JSON with `status: "ok"` when Screen Recording is granted.
 
 ## Minimal Flow
 

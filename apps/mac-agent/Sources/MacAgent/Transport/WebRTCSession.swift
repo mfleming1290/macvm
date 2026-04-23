@@ -6,6 +6,7 @@ final class WebRTCSession: NSObject {
     private let factory: LKRTCPeerConnectionFactory
     private let peerConnection: LKRTCPeerConnection
     private let screenCapturer: ScreenFrameCapturer
+    private let candidateLock = NSLock()
     private var localCandidates: [IceCandidate] = []
 
     override init() {
@@ -76,6 +77,9 @@ final class WebRTCSession: NSObject {
     }
 
     func localCandidates(since cursor: Int) -> (candidates: [IceCandidate], nextCursor: Int) {
+        candidateLock.lock()
+        defer { candidateLock.unlock() }
+
         if cursor >= localCandidates.count {
             return ([], localCandidates.count)
         }
@@ -132,6 +136,9 @@ final class WebRTCSession: NSObject {
 
 extension WebRTCSession: LKRTCPeerConnectionDelegate {
     func peerConnection(_ peerConnection: LKRTCPeerConnection, didGenerate candidate: LKRTCIceCandidate) {
+        candidateLock.lock()
+        defer { candidateLock.unlock() }
+
         localCandidates.append(
             IceCandidate(
                 candidate: candidate.sdp,

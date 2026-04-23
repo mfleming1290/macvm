@@ -2,8 +2,13 @@ import {
   AddIceCandidateRequest,
   CreateSessionRequest,
   CreateSessionResponse,
+  HealthResponse,
   IceCandidatesResponse,
   PROTOCOL_VERSION,
+  isCreateSessionResponse,
+  isErrorResponse,
+  isHealthResponse,
+  isIceCandidatesResponse,
 } from "@macvm/protocol";
 
 export type ConnectionState =
@@ -24,6 +29,8 @@ export class AgentConnection {
   private readonly events: AgentConnectionEvents;
   private icePollTimer: number | undefined;
   private iceCursor = 0;
+  private isDisconnecting = false;
+  private pendingLocalCandidates: RTCIceCandidate[] = [];
   private peer: RTCPeerConnection | undefined;
   private sessionId: string | undefined;
 
@@ -34,6 +41,8 @@ export class AgentConnection {
 
   async connect(): Promise<void> {
     this.events.onStateChange("connecting");
+    this.isDisconnecting = false;
+    await this.assertAgentReady();
 
     const peer = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -56,34 +65,54 @@ export class AgentConnection {
       if (peer.connectionState === "disconnected") {
         this.events.onStateChange("disconnected");
       }
-      if (peer.connectionState === "failed" || peer.connectionState === "closed") {
+      if (peer.connectionState === "failed") {
+        this.events.onStateChange("failed");
+      }
+      if (peer.connectionState === "closed" && !this.isDisconnecting) {
         this.events.onStateChange("failed");
       }
     };
 
     peer.onicecandidate = (event) => {
-      if (event.candidate && this.sessionId) {
+      if (!event.candidate) {
+        return;
+      }
+
+      if (this.sessionId) {
         void this.sendIceCandidate(event.candidate);
+      } else {
+        this.pendingLocalCandidates.push(event.candidate);
       }
     };
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
+    try {
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
 
-    const response = await this.postJson<CreateSessionResponse>("/api/sessions", {
-      version: PROTOCOL_VERSION,
-      offer: {
-        type: "offer",
-        sdp: offer.sdp ?? "",
-      },
-    } satisfies CreateSessionRequest);
+      const response = await this.postJson<CreateSessionResponse>(
+        "/api/sessions",
+        {
+          version: PROTOCOL_VERSION,
+          offer: {
+            type: "offer",
+            sdp: offer.sdp ?? "",
+          },
+        } satisfies CreateSessionRequest,
+        isCreateSessionResponse,
+      );
 
-    this.sessionId = response.sessionId;
-    await peer.setRemoteDescription(response.answer);
-    this.startIcePolling();
+      this.sessionId = response.sessionId;
+      await peer.setRemoteDescription(response.answer);
+      await this.flushPendingLocalCandidates();
+      this.startIcePolling();
+    } catch (error) {
+      await this.disconnect();
+      throw error;
+    }
   }
 
   async disconnect(): Promise<void> {
+    this.isDisconnecting = true;
     window.clearInterval(this.icePollTimer);
     this.icePollTimer = undefined;
 
@@ -101,7 +130,9 @@ export class AgentConnection {
     this.peer = undefined;
     this.sessionId = undefined;
     this.iceCursor = 0;
+    this.pendingLocalCandidates = [];
     this.events.onStateChange("disconnected");
+    this.isDisconnecting = false;
   }
 
   private startIcePolling(): void {
@@ -119,6 +150,7 @@ export class AgentConnection {
     try {
       const response = await this.getJson<IceCandidatesResponse>(
         `/api/sessions/${this.sessionId}/ice?since=${this.iceCursor}`,
+        isIceCandidatesResponse,
       );
       this.iceCursor = response.nextCursor;
 
@@ -145,24 +177,101 @@ export class AgentConnection {
     } satisfies AddIceCandidateRequest);
   }
 
-  private async getJson<T>(path: string): Promise<T> {
-    const response = await fetch(`${this.agentBaseUrl}${path}`);
-    if (!response.ok) {
-      throw new Error(`Agent request failed: ${response.status}`);
+  private async flushPendingLocalCandidates(): Promise<void> {
+    const candidates = this.pendingLocalCandidates;
+    this.pendingLocalCandidates = [];
+
+    for (const candidate of candidates) {
+      await this.sendIceCandidate(candidate);
     }
-    return response.json() as Promise<T>;
   }
 
-  private async postJson<T = unknown>(path: string, body: unknown): Promise<T> {
-    const response = await fetch(`${this.agentBaseUrl}${path}`, {
+  private async assertAgentReady(): Promise<void> {
+    const health = await this.getJson<HealthResponse>("/api/health", isHealthResponse);
+
+    if (!health.screenRecordingAllowed || health.status === "permissionMissing") {
+      throw new Error(
+        "The Mac agent is reachable, but Screen Recording permission is not granted. Grant it in System Settings, restart the agent app, then reconnect.",
+      );
+    }
+
+    if (health.status !== "ok") {
+      throw new Error(
+        `The Mac agent is not ready (${health.status}): ${health.lastError ?? health.sessionStatus}`,
+      );
+    }
+  }
+
+  private async getJson<T>(path: string, isExpected: (value: unknown) => value is T): Promise<T> {
+    const response = await this.fetchAgent(path);
+    return this.readJson(response, isExpected);
+  }
+
+  private async postJson<T = unknown>(
+    path: string,
+    body: unknown,
+    isExpected?: (value: unknown) => value is T,
+  ): Promise<T> {
+    const response = await this.fetchAgent(path, {
       body: JSON.stringify(body),
       headers: { "Content-Type": "application/json" },
       method: "POST",
     });
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || `Agent request failed: ${response.status}`);
+
+    if (!isExpected) {
+      return undefined as T;
     }
-    return response.json() as Promise<T>;
+
+    return this.readJson(response, isExpected);
+  }
+
+  private async fetchAgent(path: string, init?: RequestInit): Promise<Response> {
+    try {
+      const response = await fetch(`${this.agentBaseUrl}${path}`, init);
+      if (!response.ok) {
+        await this.throwAgentError(response);
+      }
+      return response;
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error(
+          `Could not reach the Mac agent at ${this.agentBaseUrl}. Check that the app is running, the URL is correct, and both devices are on the same network.`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async readJson<T>(
+    response: Response,
+    isExpected: (value: unknown) => value is T,
+  ): Promise<T> {
+    const contentType = response.headers.get("Content-Type") ?? "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(
+        `The Mac agent returned an unsupported response (${response.status}, ${contentType || "no content type"}).`,
+      );
+    }
+
+    const value: unknown = await response.json();
+    if (!isExpected(value)) {
+      throw new Error("The Mac agent returned a response that does not match the shared protocol.");
+    }
+
+    return value;
+  }
+
+  private async throwAgentError(response: Response): Promise<never> {
+    const contentType = response.headers.get("Content-Type") ?? "";
+    if (contentType.includes("application/json")) {
+      const value: unknown = await response.json();
+      if (isErrorResponse(value)) {
+        throw new Error(value.error.message);
+      }
+      throw new Error(`The Mac agent returned an unsupported error response (${response.status}).`);
+    }
+
+    const message = await response.text();
+    throw new Error(message || `Agent request failed: ${response.status}`);
   }
 }

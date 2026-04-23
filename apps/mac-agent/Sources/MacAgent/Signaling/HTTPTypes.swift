@@ -53,7 +53,9 @@ struct HTTPRequest {
         )
 
         let bodyStart = headerRange.upperBound
-        body = data[bodyStart...]
+        let contentLength = Int(headers["content-length"] ?? "0") ?? 0
+        let bodyEnd = min(data.count, bodyStart + contentLength)
+        body = data[bodyStart..<bodyEnd]
     }
 }
 
@@ -70,6 +72,19 @@ struct HTTPResponse {
             statusText: statusText(for: statusCode),
             headers: ["Content-Type": "application/json"],
             body: body
+        )
+    }
+
+    static func error(_ error: AgentError) -> HTTPResponse {
+        json(
+            ErrorResponse(
+                version: protocolVersion,
+                error: ResponseError(
+                    code: error.code,
+                    message: error.localizedDescription
+                )
+            ),
+            statusCode: error.statusCode
         )
     }
 
@@ -96,6 +111,8 @@ struct HTTPResponse {
         responseHeaders["Access-Control-Allow-Origin"] = "*"
         responseHeaders["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
         responseHeaders["Access-Control-Allow-Headers"] = "Content-Type"
+        responseHeaders["Access-Control-Max-Age"] = "600"
+        responseHeaders["Vary"] = "Origin"
         responseHeaders["Content-Length"] = "\(body.count)"
         responseHeaders["Connection"] = "close"
 
@@ -118,6 +135,8 @@ struct HTTPResponse {
             "No Content"
         case 400:
             "Bad Request"
+        case 403:
+            "Forbidden"
         case 404:
             "Not Found"
         case 405:

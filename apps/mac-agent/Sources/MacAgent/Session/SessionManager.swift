@@ -5,38 +5,81 @@ final class SessionManager {
 
     private let captureService = ScreenCaptureService()
     private var activeSession: ActiveSession?
+    private(set) var lastError: String?
+    private(set) var status = "Waiting for viewer"
 
     var hasActiveSession: Bool {
         activeSession != nil
     }
 
+    var healthStatus: String {
+        if !ScreenRecordingPermission.isGranted {
+            return "permissionMissing"
+        }
+
+        if status.hasPrefix("Capture failed") {
+            return "captureFailed"
+        }
+
+        if status.hasPrefix("Negotiation failed") {
+            return "negotiationFailed"
+        }
+
+        return "ok"
+    }
+
     func createSession(from offer: SessionDescription) async throws -> CreateSessionResponse {
         try validateProtocolDescription(offer)
+        guard ScreenRecordingPermission.isGranted else {
+            setFailureStatus("Permission missing", message: AgentError.permissionMissing.localizedDescription)
+            throw AgentError.permissionMissing
+        }
+
         await closeActiveSession()
 
         let sessionId = UUID().uuidString
         let webRTCSession = WebRTCSession()
         activeSession = ActiveSession(id: sessionId, webRTCSession: webRTCSession)
-        onSessionStatusChanged?("Negotiating")
+        setStatus("Negotiating")
 
         captureService.onFrame = { [weak webRTCSession] sampleBuffer in
             webRTCSession?.capture(sampleBuffer: sampleBuffer)
         }
 
-        let answer = try await webRTCSession.createAnswer(for: offer)
-        try await captureService.start()
-        onSessionStatusChanged?("Streaming")
+        do {
+            let answer = try await webRTCSession.createAnswer(for: offer)
+            do {
+                try await captureService.start()
+            } catch {
+                await closeActiveSession()
+                let message = error.localizedDescription
+                setFailureStatus("Capture failed", message: message)
+                throw AgentError.captureFailed(message)
+            }
 
-        return CreateSessionResponse(
-            version: protocolVersion,
-            sessionId: sessionId,
-            answer: answer
-        )
+            setStatus("Streaming")
+            return CreateSessionResponse(
+                version: protocolVersion,
+                sessionId: sessionId,
+                answer: answer
+            )
+        } catch let error as AgentError {
+            throw error
+        } catch {
+            await closeActiveSession()
+            let message = error.localizedDescription
+            setFailureStatus("Negotiation failed", message: message)
+            throw AgentError.negotiationFailed(message)
+        }
     }
 
     func addIceCandidate(_ candidate: IceCandidate, to sessionId: String) throws {
         guard let activeSession, activeSession.id == sessionId else {
-            throw SessionError.sessionNotFound
+            throw AgentError.sessionNotFound
+        }
+
+        guard candidate.isValid else {
+            throw AgentError.invalidIceCandidate
         }
 
         activeSession.webRTCSession.addRemoteCandidate(candidate)
@@ -44,7 +87,7 @@ final class SessionManager {
 
     func localCandidates(for sessionId: String, since cursor: Int) throws -> IceCandidatesResponse {
         guard let activeSession, activeSession.id == sessionId else {
-            throw SessionError.sessionNotFound
+            throw AgentError.sessionNotFound
         }
 
         let result = activeSession.webRTCSession.localCandidates(since: max(0, cursor))
@@ -65,33 +108,32 @@ final class SessionManager {
 
     private func closeActiveSession() async {
         await captureService.stop()
+        captureService.onFrame = nil
         activeSession?.webRTCSession.close()
         activeSession = nil
-        onSessionStatusChanged?("Waiting for viewer")
+        setStatus("Waiting for viewer")
     }
 
     private func validateProtocolDescription(_ description: SessionDescription) throws {
-        guard description.type == "offer", !description.sdp.isEmpty else {
-            throw SessionError.invalidOffer
+        guard description.type == "offer", !description.sdp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AgentError.invalidOffer
         }
+    }
+
+    private func setStatus(_ status: String) {
+        self.status = status
+        lastError = nil
+        onSessionStatusChanged?(status)
+    }
+
+    private func setFailureStatus(_ status: String, message: String) {
+        self.status = status
+        lastError = message
+        onSessionStatusChanged?("\(status): \(message)")
     }
 }
 
 private struct ActiveSession {
     let id: String
     let webRTCSession: WebRTCSession
-}
-
-enum SessionError: LocalizedError {
-    case invalidOffer
-    case sessionNotFound
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidOffer:
-            "The session offer is missing or invalid."
-        case .sessionNotFound:
-            "The requested session is not active."
-        }
-    }
 }

@@ -105,6 +105,13 @@ final class SignalingServer {
 
         do {
             return try await route(request)
+        } catch let error as AgentError {
+            return .error(error)
+        } catch DecodingError.dataCorrupted,
+                DecodingError.keyNotFound,
+                DecodingError.typeMismatch,
+                DecodingError.valueNotFound {
+            return .error(.invalidJSON)
         } catch {
             return .text(error.localizedDescription, statusCode: 500)
         }
@@ -117,9 +124,12 @@ final class SignalingServer {
             return .json(
                 HealthResponse(
                     version: protocolVersion,
-                    status: "ok",
+                    status: sessionManager.healthStatus,
                     activeSession: sessionManager.hasActiveSession,
-                    screenRecordingAllowed: ScreenRecordingPermission.isGranted
+                    screenRecordingAllowed: ScreenRecordingPermission.isGranted,
+                    sessionStatus: sessionManager.status,
+                    serverStatus: "Listening on :\(port)",
+                    lastError: sessionManager.lastError
                 )
             )
         }
@@ -127,7 +137,7 @@ final class SignalingServer {
         if request.method == "POST", request.path == "/api/sessions" {
             let payload = try JSONDecoder().decode(CreateSessionRequest.self, from: request.body)
             guard payload.version == protocolVersion else {
-                return .text("Unsupported protocol version.", statusCode: 400)
+                throw AgentError.unsupportedProtocolVersion
             }
             let response = try await sessionManager.createSession(from: payload.offer)
             return .json(response)
@@ -139,7 +149,7 @@ final class SignalingServer {
             if request.method == "POST" {
                 let payload = try JSONDecoder().decode(AddIceCandidateRequest.self, from: request.body)
                 guard payload.version == protocolVersion else {
-                    return .text("Unsupported protocol version.", statusCode: 400)
+                    throw AgentError.unsupportedProtocolVersion
                 }
                 try sessionManager.addIceCandidate(payload.candidate, to: sessionId)
                 return .empty()
@@ -156,7 +166,7 @@ final class SignalingServer {
             return .empty()
         }
 
-        return .text("Not found.", statusCode: 404)
+        throw AgentError.notFound
     }
 
     private func send(_ response: HTTPResponse, on connection: NWConnection) {
