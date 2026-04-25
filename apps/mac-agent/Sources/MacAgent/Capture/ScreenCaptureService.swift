@@ -216,12 +216,6 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         diagnosticsLock.unlock()
     }
 
-    private func recordDroppedFrame() {
-        diagnosticsLock.lock()
-        droppedFrames += 1
-        diagnosticsLock.unlock()
-    }
-
     private func recordIncompleteDrop() {
         diagnosticsLock.lock()
         droppedFrames += 1

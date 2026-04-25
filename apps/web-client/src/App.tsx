@@ -85,7 +85,6 @@ export default function App() {
   const clipboardAutoSyncTimerRef = useRef<number | null>(null);
   const clipboardPollBusyRef = useRef(false);
   const connectionRef = useRef<AgentConnection | null>(null);
-  const frameRef = useRef<HTMLDivElement | null>(null);
   const frameStateRef = useRef<ContainedFrame>({ x: 0, y: 0, width: 0, height: 0, scale: 0 });
   const inputControllerRef = useRef<RemoteInputController | null>(null);
   const lastBrowserClipboardSnapshotRef = useRef("");
@@ -541,7 +540,6 @@ export default function App() {
       <section className="remote-stage" aria-label="Remote display" ref={stageRef}>
         <div
           className="remote-frame"
-          ref={frameRef}
           style={{
             left: 0,
             top: 0,

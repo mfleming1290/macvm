@@ -61,6 +61,15 @@ struct StreamQualitySettings: Codable, Equatable {
             1_920
         }
     }
+
+    var hasSupportedResolutionPreset: Bool {
+        switch resolutionPreset {
+        case "native", "1440p", "1080p", "720p":
+            true
+        default:
+            false
+        }
+    }
 }
 
 struct StreamClientStats: Codable {

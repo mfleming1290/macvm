@@ -30,27 +30,29 @@ struct HTTPRequest {
         let rawPath = String(requestParts[1])
         if let components = URLComponents(string: rawPath) {
             path = components.path
-            query = Dictionary(
-                uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
-                    item.value.map { (item.name, $0) }
+            var parsedQuery: [String: String] = [:]
+            for item in components.queryItems ?? [] {
+                if let value = item.value {
+                    parsedQuery[item.name] = value
                 }
-            )
+            }
+            query = parsedQuery
         } else {
             path = rawPath
             query = [:]
         }
 
-        headers = Dictionary(
-            uniqueKeysWithValues: lines.dropFirst().compactMap { line in
-                guard let separator = line.firstIndex(of: ":") else {
-                    return nil
-                }
-
-                let name = line[..<separator].trimmingCharacters(in: .whitespaces).lowercased()
-                let value = line[line.index(after: separator)...].trimmingCharacters(in: .whitespaces)
-                return (name, value)
+        var parsedHeaders: [String: String] = [:]
+        for line in lines.dropFirst() {
+            guard let separator = line.firstIndex(of: ":") else {
+                continue
             }
-        )
+
+            let name = line[..<separator].trimmingCharacters(in: .whitespaces).lowercased()
+            let value = line[line.index(after: separator)...].trimmingCharacters(in: .whitespaces)
+            parsedHeaders[name] = value
+        }
+        headers = parsedHeaders
 
         let bodyStart = headerRange.upperBound
         let contentLength = Int(headers["content-length"] ?? "0") ?? 0

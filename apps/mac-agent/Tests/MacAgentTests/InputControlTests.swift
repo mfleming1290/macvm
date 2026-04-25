@@ -120,4 +120,24 @@ final class InputControlTests: XCTestCase {
         XCTAssertEqual(message.stats.frameWidth, 1280)
         XCTAssertEqual(message.stats.bitrateBps, 9_000_000)
     }
+
+    func testControlProtocolRejectsUnsupportedResolutionPreset() {
+        let data = Data(
+            """
+            {
+              "version": 1,
+              "type": "stream.quality.update",
+              "sequence": 10,
+              "timestampMs": 1234,
+              "settings": {
+                "maxBitrateBps": 20000000,
+                "framesPerSecond": 30,
+                "resolutionPreset": "4k"
+              }
+            }
+            """.utf8
+        )
+
+        XCTAssertThrowsError(try ControlProtocol.decode(data))
+    }
 }

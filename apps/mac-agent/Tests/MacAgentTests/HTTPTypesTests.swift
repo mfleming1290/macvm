@@ -31,4 +31,20 @@ final class HTTPTypesTests: XCTestCase {
         XCTAssertTrue(serialized?.contains("Access-Control-Allow-Origin: *") == true)
         XCTAssertTrue(serialized?.contains("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS") == true)
     }
+
+    func testRequestParserToleratesDuplicateHeadersAndQueryItems() throws {
+        let rawRequest = """
+        GET /api/sessions/abc/ice?since=1&since=4 HTTP/1.1\r
+        Host: localhost\r
+        X-Duplicate: first\r
+        X-Duplicate: second\r
+        \r
+
+        """
+
+        let request = try XCTUnwrap(HTTPRequest(data: Data(rawRequest.utf8)))
+
+        XCTAssertEqual(request.query["since"], "4")
+        XCTAssertEqual(request.headers["x-duplicate"], "second")
+    }
 }

@@ -142,6 +142,9 @@ final class SignalingServer {
             guard payload.version == protocolVersion else {
                 throw AgentError.unsupportedProtocolVersion
             }
+            if let stream = payload.stream, !stream.hasSupportedResolutionPreset {
+                throw AgentError.invalidInput
+            }
             let response = try await sessionManager.createSession(
                 from: payload.offer,
                 streamSettings: payload.stream ?? .defaultSettings

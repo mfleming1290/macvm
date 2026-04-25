@@ -222,6 +222,10 @@ enum ControlProtocol {
         guard [30, 45, 60].contains(settings.framesPerSecond) else {
             throw ControlProtocolError.invalidQuality
         }
+
+        guard settings.hasSupportedResolutionPreset else {
+            throw ControlProtocolError.invalidQuality
+        }
     }
 }
 
