@@ -8,6 +8,8 @@ struct MediaDiagnostics: Codable {
     var droppedIncompleteFrames: Int
     var droppedPacingFrames: Int
     var droppedBackpressureFrames: Int
+    var configuredPixelFormat: String
+    var configuredQueueDepth: Int
     var targetFramesPerSecond: Int
     var requestedFramesPerSecond: Int
     var effectiveFramesPerSecond: Int
@@ -44,6 +46,8 @@ struct MediaDiagnostics: Codable {
         case droppedIncompleteFrames
         case droppedPacingFrames
         case droppedBackpressureFrames
+        case configuredPixelFormat
+        case configuredQueueDepth
         case targetFramesPerSecond
         case requestedFramesPerSecond
         case effectiveFramesPerSecond
@@ -81,6 +85,8 @@ struct MediaDiagnostics: Codable {
         droppedIncompleteFrames: 0,
         droppedPacingFrames: 0,
         droppedBackpressureFrames: 0,
+        configuredPixelFormat: "420v",
+        configuredQueueDepth: 1,
         targetFramesPerSecond: 0,
         requestedFramesPerSecond: 0,
         effectiveFramesPerSecond: 0,
@@ -119,6 +125,8 @@ struct MediaDiagnostics: Codable {
         try container.encode(droppedIncompleteFrames, forKey: .droppedIncompleteFrames)
         try container.encode(droppedPacingFrames, forKey: .droppedPacingFrames)
         try container.encode(droppedBackpressureFrames, forKey: .droppedBackpressureFrames)
+        try container.encode(configuredPixelFormat, forKey: .configuredPixelFormat)
+        try container.encode(configuredQueueDepth, forKey: .configuredQueueDepth)
         try container.encode(targetFramesPerSecond, forKey: .targetFramesPerSecond)
         try container.encode(requestedFramesPerSecond, forKey: .requestedFramesPerSecond)
         try container.encode(effectiveFramesPerSecond, forKey: .effectiveFramesPerSecond)

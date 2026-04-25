@@ -62,6 +62,8 @@ The `media` object reports live capture and sender diagnostics. The most useful 
 - `droppedIncompleteFrames`: invalid or incomplete capture frames
 - `droppedPacingFrames`: complete frames dropped to hold the target cadence
 - `droppedBackpressureFrames`: stale frames discarded when the WebRTC capturer is still busy
+- `configuredPixelFormat`: ScreenCaptureKit pixel format requested by the agent, usually `420v`
+- `configuredQueueDepth`: ScreenCaptureKit queue depth requested by the agent
 - `targetFramesPerSecond`: current pacing target
 - `requestedFramesPerSecond`: browser-selected FPS target
 - `effectiveFramesPerSecond`: current agent submission FPS after load adaptation

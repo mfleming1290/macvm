@@ -106,6 +106,8 @@ Agent-side `/api/health` includes:
 - `droppedIncompleteFrames`: invalid or incomplete ScreenCaptureKit frames filtered out.
 - `droppedPacingFrames`: complete frames dropped because they arrived sooner than the current target cadence.
 - `droppedBackpressureFrames`: stale frames discarded because the custom WebRTC capturer was still delivering a newer frame.
+- `configuredPixelFormat`: ScreenCaptureKit pixel format requested by the agent.
+- `configuredQueueDepth`: ScreenCaptureKit queue depth requested by the agent.
 - `targetFramesPerSecond`: current pacing target for the live pipeline.
 - `sourceFrames`: sample buffers handed from capture into the custom LiveKitWebRTC capturer.
 - `capturerFrames`: frames actually delivered into the WebRTC video source.
@@ -122,7 +124,7 @@ Browser-side diagnostics show:
 - computed remote stage size and contained display rect used for rendering and pointer mapping
 - DataChannel state for the input control path
 
-For the current LiveKitWebRTC answerer path, the Mac agent starts ScreenCaptureKit first, configures a screencast `RTCVideoSource`, binds the video track to the browser offer's negotiated video transceiver as `sendOnly`, then creates the answer. Capture uses a higher ceiling internally, the submission gate enforces the current effective FPS target, ScreenCaptureKit queue depth stays low, and the custom capturer keeps only the newest pending frame when overloaded. Avoid moving the video sender setup back to a separate pre-offer `addTrack` path unless you re-verify Safari/Chrome negotiation and decoded frame dimensions.
+For the current LiveKitWebRTC answerer path, the Mac agent starts ScreenCaptureKit first, configures a screencast `RTCVideoSource`, binds the video track to the browser offer's negotiated video transceiver as `sendOnly`, then creates the answer. Capture uses a higher ceiling internally, the submission gate enforces the current effective FPS target, ScreenCaptureKit queue depth defaults to `1`, and the custom capturer keeps only the newest pending frame when overloaded. Avoid moving the video sender setup back to a separate pre-offer `addTrack` path unless you re-verify Safari/Chrome negotiation and decoded frame dimensions.
 
 ## Browser Viewport Layout
 
@@ -132,7 +134,7 @@ The browser uses an explicit contained-frame helper instead of relying on passiv
 
 ## Video Quality Tuning
 
-The Mac agent keeps the same WebRTC sender path, but ScreenCaptureKit produces video-range NV12 (`420v`) frames and capture output is capped to a 1920-pixel long edge when the display is larger. The sender applies the current runtime bitrate/FPS settings, uses high network priority, and keeps a screen-stream-friendly degradation preference.
+The Mac agent keeps the same WebRTC sender path, but ScreenCaptureKit produces video-range NV12 (`420v`) frames with queue depth `1` by default and capture output is capped to a 1920-pixel long edge when the display is larger. The sender applies the current runtime bitrate/FPS settings, uses high network priority, and keeps a screen-stream-friendly degradation preference.
 
 The intent is to reduce encoder pressure from very large Retina frames while giving motion more bitrate headroom. This should reduce smearing during fast desktop changes without introducing an alternate transport or buffering strategy. Browser bitrate changes are committed on release/blur instead of on every slider movement so the active session does not churn sender parameters continuously.
 
@@ -143,6 +145,8 @@ The stream controls now support:
 - reconnect-required resolution changes
 
 The agent captures with a higher internal ceiling, but the pacing gate is the authoritative submission control. Under load, the agent may lower the effective submitted FPS below the requested FPS when browser decode/network stats or local stale-frame drops show that the client cannot keep up. This keeps latency bounded instead of allowing old frames to accumulate.
+
+For local experiments, `MACVM_CAPTURE_PIXEL_FORMAT=bgra` restores BGRA capture and `MACVM_SCK_QUEUE_DEPTH=2` or `3` raises the ScreenCaptureKit queue depth. Unsupported values fall back to the low-latency defaults.
 
 ## Control Path Diagnostics
 

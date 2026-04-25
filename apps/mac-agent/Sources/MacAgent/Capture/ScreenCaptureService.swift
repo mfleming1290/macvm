@@ -4,7 +4,49 @@ import CoreGraphics
 import Foundation
 import ScreenCaptureKit
 
-private let capturePixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+struct CaptureRuntimeSettings {
+    let pixelFormat: OSType
+    let pixelFormatName: String
+    let queueDepth: Int
+
+    static let defaultPixelFormatName = "420v"
+    static let defaultQueueDepth = 1
+
+    static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> CaptureRuntimeSettings {
+        let pixelFormatName = normalizedPixelFormatName(environment["MACVM_CAPTURE_PIXEL_FORMAT"])
+        return CaptureRuntimeSettings(
+            pixelFormat: pixelFormat(for: pixelFormatName),
+            pixelFormatName: pixelFormatName,
+            queueDepth: normalizedQueueDepth(environment["MACVM_SCK_QUEUE_DEPTH"])
+        )
+    }
+
+    private static func normalizedPixelFormatName(_ value: String?) -> String {
+        switch value?.lowercased() {
+        case "bgra":
+            return "BGRA"
+        default:
+            return defaultPixelFormatName
+        }
+    }
+
+    private static func pixelFormat(for name: String) -> OSType {
+        switch name {
+        case "BGRA":
+            return kCVPixelFormatType_32BGRA
+        default:
+            return kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        }
+    }
+
+    private static func normalizedQueueDepth(_ value: String?) -> Int {
+        guard let value, let queueDepth = Int(value), (1...3).contains(queueDepth) else {
+            return defaultQueueDepth
+        }
+
+        return queueDepth
+    }
+}
 
 final class ScreenCaptureService: NSObject, SCStreamOutput {
     var onFrame: ((CMSampleBuffer) -> Void)?
@@ -13,6 +55,8 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
     private let outputQueue = DispatchQueue(label: "macvm.capture.output")
     private var captureFrames = 0
     private var completeFrames = 0
+    private var configuredPixelFormat = CaptureRuntimeSettings.defaultPixelFormatName
+    private var configuredQueueDepth = CaptureRuntimeSettings.defaultQueueDepth
     private var configuredStreamFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
     private var submittedFrames = 0
     private var droppedFrames = 0
@@ -46,6 +90,8 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         diagnostics.droppedFrames = droppedFrames
         diagnostics.droppedIncompleteFrames = droppedIncompleteFrames
         diagnostics.droppedPacingFrames = droppedPacingFrames
+        diagnostics.configuredPixelFormat = configuredPixelFormat
+        diagnostics.configuredQueueDepth = configuredQueueDepth
         diagnostics.targetFramesPerSecond = effectiveFramesPerSecond
         diagnostics.requestedFramesPerSecond = requestedFramesPerSecond
         diagnostics.effectiveFramesPerSecond = effectiveFramesPerSecond
@@ -94,6 +140,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
             throw CaptureError.noDisplayAvailable
         }
 
+        let runtimeSettings = CaptureRuntimeSettings.current()
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let configuration = SCStreamConfiguration()
         let captureSize = scaledCaptureSize(
@@ -107,8 +154,8 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
             value: 1,
             timescale: CMTimeScale(requestedFramesPerSecond)
         )
-        configuration.pixelFormat = capturePixelFormat
-        configuration.queueDepth = 2
+        configuration.pixelFormat = runtimeSettings.pixelFormat
+        configuration.queueDepth = runtimeSettings.queueDepth
         configuration.showsCursor = true
 
         let nextStream = SCStream(filter: filter, configuration: configuration, delegate: nil)
@@ -116,6 +163,8 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         try await nextStream.startCapture()
         stream = nextStream
         streamConfiguration = configuration
+        configuredPixelFormat = runtimeSettings.pixelFormatName
+        configuredQueueDepth = runtimeSettings.queueDepth
         configuredStreamFramesPerSecond = requestedFramesPerSecond
         targetWidth = captureSize.width
         targetHeight = captureSize.height
@@ -255,6 +304,8 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         droppedFrames = 0
         droppedIncompleteFrames = 0
         droppedPacingFrames = 0
+        configuredPixelFormat = CaptureRuntimeSettings.defaultPixelFormatName
+        configuredQueueDepth = CaptureRuntimeSettings.defaultQueueDepth
         configuredStreamFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
         requestedFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
         effectiveFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond

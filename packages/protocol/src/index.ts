@@ -77,6 +77,8 @@ export interface MediaDiagnostics {
   droppedIncompleteFrames: number;
   droppedPacingFrames: number;
   droppedBackpressureFrames: number;
+  configuredPixelFormat: string;
+  configuredQueueDepth: number;
   targetFramesPerSecond: number;
   requestedFramesPerSecond: number;
   effectiveFramesPerSecond: number;
@@ -406,6 +408,8 @@ function isMediaDiagnostics(value: unknown): value is MediaDiagnostics {
     typeof value.droppedIncompleteFrames === "number" &&
     typeof value.droppedPacingFrames === "number" &&
     typeof value.droppedBackpressureFrames === "number" &&
+    typeof value.configuredPixelFormat === "string" &&
+    typeof value.configuredQueueDepth === "number" &&
     typeof value.targetFramesPerSecond === "number" &&
     typeof value.requestedFramesPerSecond === "number" &&
     typeof value.effectiveFramesPerSecond === "number" &&

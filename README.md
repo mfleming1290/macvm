@@ -148,6 +148,8 @@ For an active stream, `media` should show stable paced frame flow all the way th
   "submittedFrames": 122,
   "droppedPacingFrames": 122,
   "droppedBackpressureFrames": 0,
+  "configuredPixelFormat": "420v",
+  "configuredQueueDepth": 1,
   "targetFramesPerSecond": 30,
   "capturerFrames": 122,
   "sourceFrames": 122,
@@ -182,7 +184,7 @@ For input, `/api/health` should include `accessibilityAllowed: true` and a `cont
 
 The browser shell is fixed to `100vw` by `100vh` with page-level overflow hidden. Inside the center stage, the browser computes an explicit floating frame from the stage size and intrinsic stream size, then renders the video into that frame. That frame preserves aspect ratio, scales to the largest contained size, and is reused for pointer mapping diagnostics.
 
-The agent captures video-range NV12 (`420v`) frames, caps oversized capture output to a 1920-pixel long edge while preserving display aspect ratio, then sets the WebRTC sender to a higher-bitrate screen-stream profile. Capture is paced explicitly, ScreenCaptureKit queue depth is kept low, and the custom WebRTC bridge keeps only the newest pending frame under load so latency does not grow behind old desktop frames. The browser bitrate slider now supports up to 100 Mbps, but changes are committed on release instead of being applied continuously during drag so interaction stays responsive.
+The agent captures video-range NV12 (`420v`) frames, caps oversized capture output to a 1920-pixel long edge while preserving display aspect ratio, then sets the WebRTC sender to a higher-bitrate screen-stream profile. Capture is paced explicitly, ScreenCaptureKit queue depth defaults to `1`, and the custom WebRTC bridge keeps only the newest pending frame under load so latency does not grow behind old desktop frames. For rollback experiments, `MACVM_CAPTURE_PIXEL_FORMAT=bgra` switches capture back to BGRA and `MACVM_SCK_QUEUE_DEPTH=2` or `3` raises the ScreenCaptureKit queue depth. The browser bitrate slider now supports up to 100 Mbps, but changes are committed on release instead of being applied continuously during drag so interaction stays responsive.
 
 The stream tuning path now supports 30/45/60 FPS targets, a bitrate ceiling up to 100 Mbps, and browser-to-agent stats feedback over the existing `macvm-control` DataChannel. The agent still prefers stable pacing and “latest frame wins” behavior over maximum raw throughput: it can lower the effective submitted FPS when browser decode stats or local stale-frame drops show the client is falling behind. Resolution changes still apply on reconnect, while bitrate and FPS changes apply at runtime.
 
