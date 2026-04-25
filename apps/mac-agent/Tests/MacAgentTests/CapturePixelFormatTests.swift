@@ -12,12 +12,12 @@ final class CapturePixelFormatTests: XCTestCase {
         )
     }
 
-    func testCaptureRuntimeSettingsDefaultToLowLatencyNV12() {
+    func testCaptureRuntimeSettingsDefaultToSafeNV12() {
         let settings = CaptureRuntimeSettings.current(environment: [:])
 
         XCTAssertEqual(settings.pixelFormat, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
         XCTAssertEqual(settings.pixelFormatName, "420v")
-        XCTAssertEqual(settings.queueDepth, 1)
+        XCTAssertEqual(settings.queueDepth, 2)
     }
 
     func testCaptureRuntimeSettingsAllowBGRAFallback() {
@@ -31,6 +31,10 @@ final class CapturePixelFormatTests: XCTestCase {
 
     func testCaptureRuntimeSettingsAllowSupportedQueueDepthOverrides() {
         XCTAssertEqual(
+            CaptureRuntimeSettings.current(environment: ["MACVM_SCK_QUEUE_DEPTH": "1"]).queueDepth,
+            1
+        )
+        XCTAssertEqual(
             CaptureRuntimeSettings.current(environment: ["MACVM_SCK_QUEUE_DEPTH": "2"]).queueDepth,
             2
         )
@@ -43,15 +47,15 @@ final class CapturePixelFormatTests: XCTestCase {
     func testCaptureRuntimeSettingsRejectUnsupportedQueueDepthOverrides() {
         XCTAssertEqual(
             CaptureRuntimeSettings.current(environment: ["MACVM_SCK_QUEUE_DEPTH": "0"]).queueDepth,
-            1
+            2
         )
         XCTAssertEqual(
             CaptureRuntimeSettings.current(environment: ["MACVM_SCK_QUEUE_DEPTH": "4"]).queueDepth,
-            1
+            2
         )
         XCTAssertEqual(
             CaptureRuntimeSettings.current(environment: ["MACVM_SCK_QUEUE_DEPTH": "slow"]).queueDepth,
-            1
+            2
         )
     }
 }

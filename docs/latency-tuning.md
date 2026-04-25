@@ -7,8 +7,8 @@ This note records the current low-latency capture experiment without changing th
 - ScreenCaptureKit captures the selected display.
 - The agent requests video-range NV12 (`420v`) by default.
 - `MACVM_CAPTURE_PIXEL_FORMAT=bgra` restores BGRA capture for rollback comparisons.
-- ScreenCaptureKit queue depth defaults to `1`.
-- `MACVM_SCK_QUEUE_DEPTH=2` or `3` raises queue depth for local experiments.
+- ScreenCaptureKit queue depth defaults to `2`.
+- `MACVM_SCK_QUEUE_DEPTH=1` or `3` changes queue depth for local experiments.
 - Unsupported environment values fall back to the defaults.
 - `minimumFrameInterval` is set to `1 / requestedFramesPerSecond` when capture starts.
 - Runtime FPS updates recompute the effective FPS and call `SCStream.updateConfiguration`.
@@ -52,7 +52,7 @@ The public headers do not expose a direct VideoToolbox low-latency flag such as 
 Compare the default path against fallback settings under the same resolution, FPS, and bitrate:
 
 ```sh
-MACVM_CAPTURE_PIXEL_FORMAT=bgra MACVM_SCK_QUEUE_DEPTH=2 \
+MACVM_CAPTURE_PIXEL_FORMAT=bgra MACVM_SCK_QUEUE_DEPTH=3 \
   "apps/mac-agent/build/macvm Agent.app/Contents/MacOS/MacAgent"
 ```
 

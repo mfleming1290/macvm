@@ -118,7 +118,7 @@ The stack currently has four active planes:
 - development build script supports stable Apple Development signing via `MACVM_CODESIGN_IDENTITY` or `--signing-identity`, with explicit ad-hoc fallback only when no stable identity is available
 - ScreenCaptureKit for screen capture
 - video-range NV12 (`420v`) ScreenCaptureKit pixel buffers for the WebRTC video path
-- ScreenCaptureKit queue depth `1` by default, with `MACVM_SCK_QUEUE_DEPTH=2|3` for local experiments
+- ScreenCaptureKit queue depth `2` by default, with `MACVM_SCK_QUEUE_DEPTH=1|3` for local experiments
 - LiveKitWebRTC for native WebRTC media
 - Network.framework for the minimal local HTTP signaling server
 - centralized Screen Recording and Accessibility permission checks

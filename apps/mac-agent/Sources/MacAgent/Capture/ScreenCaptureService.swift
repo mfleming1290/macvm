@@ -10,7 +10,7 @@ struct CaptureRuntimeSettings {
     let queueDepth: Int
 
     static let defaultPixelFormatName = "420v"
-    static let defaultQueueDepth = 1
+    static let defaultQueueDepth = 2
 
     static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> CaptureRuntimeSettings {
         let pixelFormatName = normalizedPixelFormatName(environment["MACVM_CAPTURE_PIXEL_FORMAT"])

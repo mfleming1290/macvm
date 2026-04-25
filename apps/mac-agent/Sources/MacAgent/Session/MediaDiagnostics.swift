@@ -86,7 +86,7 @@ struct MediaDiagnostics: Codable {
         droppedPacingFrames: 0,
         droppedBackpressureFrames: 0,
         configuredPixelFormat: "420v",
-        configuredQueueDepth: 1,
+        configuredQueueDepth: 2,
         targetFramesPerSecond: 0,
         requestedFramesPerSecond: 0,
         effectiveFramesPerSecond: 0,
