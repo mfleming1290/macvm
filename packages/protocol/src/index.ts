@@ -78,6 +78,8 @@ export interface MediaDiagnostics {
   droppedPacingFrames: number;
   droppedBackpressureFrames: number;
   targetFramesPerSecond: number;
+  requestedFramesPerSecond: number;
+  effectiveFramesPerSecond: number;
   capturerFrames: number;
   sourceFrames: number;
   lastFrameWidth: number | null;
@@ -94,6 +96,14 @@ export interface MediaDiagnostics {
   localCandidates: number;
   signalingState: string;
   iceConnectionState: string;
+  clientDecodedFrames: number | null;
+  clientDroppedFrames: number | null;
+  clientEstimatedFramesPerSecond: number | null;
+  clientFrameWidth: number | null;
+  clientFrameHeight: number | null;
+  clientJitterMs: number | null;
+  clientRoundTripTimeMs: number | null;
+  clientBitrateBps: number | null;
 }
 
 export interface ControlDiagnostics {
@@ -123,12 +133,14 @@ export type ControlMessageType =
   | "clipboard.set"
   | "clipboard.get"
   | "clipboard.value"
-  | "clipboard.error";
+  | "clipboard.error"
+  | "stream.stats.report";
 
 export type StreamResolutionPreset = "native" | "1440p" | "1080p" | "720p";
 
 export interface StreamQualitySettings {
   maxBitrateBps: number;
+  framesPerSecond: 30 | 45 | 60;
   resolutionPreset: StreamResolutionPreset;
 }
 
@@ -221,6 +233,22 @@ export interface ClipboardErrorMessage extends ControlMessageBase {
   message: string;
 }
 
+export interface StreamStatsReportMessage extends ControlMessageBase {
+  type: "stream.stats.report";
+  stats: StreamClientStats;
+}
+
+export interface StreamClientStats {
+  decodedFrames: number | null;
+  droppedFrames: number | null;
+  estimatedFramesPerSecond: number | null;
+  frameWidth: number | null;
+  frameHeight: number | null;
+  jitterMs: number | null;
+  roundTripTimeMs: number | null;
+  bitrateBps: number | null;
+}
+
 export type ControlMessage =
   | MouseMoveMessage
   | MouseButtonMessage
@@ -231,7 +259,8 @@ export type ControlMessage =
   | ClipboardSetMessage
   | ClipboardGetMessage
   | ClipboardValueMessage
-  | ClipboardErrorMessage;
+  | ClipboardErrorMessage
+  | StreamStatsReportMessage;
 
 export interface ErrorResponse {
   version: typeof PROTOCOL_VERSION;
@@ -353,6 +382,8 @@ export function isControlMessage(value: unknown): value is ControlMessage {
         isClipboardErrorCode(value.code) &&
         typeof value.message === "string"
       );
+    case "stream.stats.report":
+      return isStreamClientStats(value.stats);
   }
 }
 
@@ -376,6 +407,8 @@ function isMediaDiagnostics(value: unknown): value is MediaDiagnostics {
     typeof value.droppedPacingFrames === "number" &&
     typeof value.droppedBackpressureFrames === "number" &&
     typeof value.targetFramesPerSecond === "number" &&
+    typeof value.requestedFramesPerSecond === "number" &&
+    typeof value.effectiveFramesPerSecond === "number" &&
     typeof value.capturerFrames === "number" &&
     typeof value.sourceFrames === "number" &&
     (typeof value.lastFrameWidth === "number" || value.lastFrameWidth === null) &&
@@ -391,7 +424,15 @@ function isMediaDiagnostics(value: unknown): value is MediaDiagnostics {
     typeof value.senderTrackReadyState === "string" &&
     typeof value.localCandidates === "number" &&
     typeof value.signalingState === "string" &&
-    typeof value.iceConnectionState === "string"
+    typeof value.iceConnectionState === "string" &&
+    (typeof value.clientDecodedFrames === "number" || value.clientDecodedFrames === null) &&
+    (typeof value.clientDroppedFrames === "number" || value.clientDroppedFrames === null) &&
+    (typeof value.clientEstimatedFramesPerSecond === "number" || value.clientEstimatedFramesPerSecond === null) &&
+    (typeof value.clientFrameWidth === "number" || value.clientFrameWidth === null) &&
+    (typeof value.clientFrameHeight === "number" || value.clientFrameHeight === null) &&
+    (typeof value.clientJitterMs === "number" || value.clientJitterMs === null) &&
+    (typeof value.clientRoundTripTimeMs === "number" || value.clientRoundTripTimeMs === null) &&
+    (typeof value.clientBitrateBps === "number" || value.clientBitrateBps === null)
   );
 }
 
@@ -452,11 +493,26 @@ function isStreamQualitySettings(value: unknown): value is StreamQualitySettings
     isRecord(value) &&
     typeof value.maxBitrateBps === "number" &&
     value.maxBitrateBps >= 1_000_000 &&
-    value.maxBitrateBps <= 50_000_000 &&
+    value.maxBitrateBps <= 100_000_000 &&
+    (value.framesPerSecond === 30 || value.framesPerSecond === 45 || value.framesPerSecond === 60) &&
     (value.resolutionPreset === "native" ||
       value.resolutionPreset === "1440p" ||
       value.resolutionPreset === "1080p" ||
       value.resolutionPreset === "720p")
+  );
+}
+
+function isStreamClientStats(value: unknown): value is StreamClientStats {
+  return (
+    isRecord(value) &&
+    (typeof value.decodedFrames === "number" || value.decodedFrames === null) &&
+    (typeof value.droppedFrames === "number" || value.droppedFrames === null) &&
+    (typeof value.estimatedFramesPerSecond === "number" || value.estimatedFramesPerSecond === null) &&
+    (typeof value.frameWidth === "number" || value.frameWidth === null) &&
+    (typeof value.frameHeight === "number" || value.frameHeight === null) &&
+    (typeof value.jitterMs === "number" || value.jitterMs === null) &&
+    (typeof value.roundTripTimeMs === "number" || value.roundTripTimeMs === null) &&
+    (typeof value.bitrateBps === "number" || value.bitrateBps === null)
   );
 }
 

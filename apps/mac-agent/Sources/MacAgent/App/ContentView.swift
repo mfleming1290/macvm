@@ -77,7 +77,13 @@ private struct DiagnosticsView: View {
             GridRow {
                 Text("Bridge")
                     .fontWeight(.semibold)
-                Text("\(mediaDiagnostics.capturerFrames) capturer frames, \(mediaDiagnostics.sourceFrames) source frames")
+                Text("\(mediaDiagnostics.capturerFrames) capturer frames, \(mediaDiagnostics.sourceFrames) source frames, stale \(mediaDiagnostics.droppedBackpressureFrames)")
+                    .foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Pacing")
+                    .fontWeight(.semibold)
+                Text("requested \(mediaDiagnostics.requestedFramesPerSecond) fps, effective \(mediaDiagnostics.effectiveFramesPerSecond) fps")
                     .foregroundStyle(.secondary)
             }
             GridRow {
@@ -89,7 +95,13 @@ private struct DiagnosticsView: View {
             GridRow {
                 Text("Sender")
                     .fontWeight(.semibold)
-                Text("\(mediaDiagnostics.senderAttached ? "attached" : "missing"), track \(mediaDiagnostics.senderTrackReadyState), ICE \(mediaDiagnostics.iceConnectionState)")
+                Text("\(mediaDiagnostics.senderAttached ? "attached" : "missing"), track \(mediaDiagnostics.senderTrackReadyState), ICE \(mediaDiagnostics.iceConnectionState), bitrate \(bitrateDescription)")
+                    .foregroundStyle(.secondary)
+            }
+            GridRow {
+                Text("Client")
+                    .fontWeight(.semibold)
+                Text(clientDescription)
                     .foregroundStyle(.secondary)
             }
             GridRow {
@@ -122,6 +134,22 @@ private struct DiagnosticsView: View {
         }
 
         return "\(width)x\(height) \(mediaDiagnostics.lastPixelFormat ?? "unknown")"
+    }
+
+    private var bitrateDescription: String {
+        guard let bitrate = mediaDiagnostics.selectedBitrateBps else {
+            return "n/a"
+        }
+
+        return String(format: "%.1f Mbps", Double(bitrate) / 1_000_000)
+    }
+
+    private var clientDescription: String {
+        let fps = mediaDiagnostics.clientEstimatedFramesPerSecond.map { String(format: "%.1f", $0) } ?? "n/a"
+        let bitrate = mediaDiagnostics.clientBitrateBps.map { String(format: "%.1f", Double($0) / 1_000_000) } ?? "n/a"
+        let rtt = mediaDiagnostics.clientRoundTripTimeMs.map { String(format: "%.1f", $0) } ?? "n/a"
+        let jitter = mediaDiagnostics.clientJitterMs.map { String(format: "%.1f", $0) } ?? "n/a"
+        return "\(fps) fps, \(bitrate) Mbps, RTT \(rtt) ms, jitter \(jitter) ms"
     }
 }
 

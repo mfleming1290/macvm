@@ -2,6 +2,8 @@
 
 The MVP requires Screen Recording permission for capture and Accessibility permission for remote input.
 
+This repo does not currently have any app-side model configuration. If repo tooling or Codex guidance needs an explicit coding model reference while working on permission/build flow, use GPT-5.5 as the current baseline.
+
 The app checks permission at launch using `CGPreflightScreenCaptureAccess()` and can trigger the system prompt with `CGRequestScreenCaptureAccess()`.
 
 Use the generated development app bundle for permission testing:

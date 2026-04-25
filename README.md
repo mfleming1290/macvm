@@ -10,6 +10,19 @@ It includes:
 - a Vite React web client that connects with browser-native WebRTC and renders the stream in a `<video>` element
 - a WebRTC DataChannel control path for mouse, wheel, and keyboard input
 - explicit text-only clipboard set/get over the existing WebRTC DataChannel
+- runtime bitrate/FPS controls plus browser-to-agent stream stats feedback over the existing WebRTC DataChannel
+
+Current state:
+
+- video streaming, remote input, and text clipboard exchange are working in the current MVP
+- the browser remote view uses an explicit contained floating frame for sizing and pointer mapping
+- the agent supports stable development signing for better macOS permission persistence
+- low-latency tuning is still in progress; the pipeline is functional, but responsiveness under heavy motion still needs refinement
+
+Repo tooling note:
+
+- `macvm` does not currently use an app-side LLM model setting
+- if repo tooling or Codex guidance needs an explicit coding model, use GPT-5.5 as the current baseline
 
 ## Project Structure
 
@@ -77,6 +90,18 @@ Start the web client:
 npm run dev:web
 ```
 
+If port `5173` is already in use, override it with:
+
+```sh
+WEB_CLIENT_PORT=3000 npm run dev:web
+```
+
+You can also put it in [apps/web-client/.env](/Users/matt/Documents/macvm/apps/web-client/.env):
+
+```sh
+WEB_CLIENT_PORT=3000
+```
+
 Open the Vite URL from another machine on the same network. Enter the Mac agent base URL, for example:
 
 ```text
@@ -135,6 +160,8 @@ For an active stream, `media` should show stable paced frame flow all the way th
 
 The browser also shows a small Media Diagnostics panel. A healthy stream shows a live remote track, decoded frames, and non-zero video dimensions. The web client constrains the remote video inside the viewport with `object-fit: contain`, so the full desktop should be visible without page scrolling.
 
+The browser and agent also exchange stream feedback over the same DataChannel. During an active session, `media.requestedFramesPerSecond`, `media.effectiveFramesPerSecond`, and the `client*` stats fields in `/api/health` should populate once the browser has started decoding frames.
+
 For input, `/api/health` should include `accessibilityAllowed: true` and a `control` object. During an active controlled session, `control.channelState` should become `open`, `receivedMessages` should increase as input is captured, and `injectedEvents` should increase when Accessibility permission allows injection.
 
 ## Minimal Flow
@@ -153,4 +180,13 @@ For input, `/api/health` should include `accessibilityAllowed: true` and a `cont
 
 The browser shell is fixed to `100vw` by `100vh` with page-level overflow hidden. Inside the center stage, the browser computes an explicit floating frame from the stage size and intrinsic stream size, then renders the video into that frame. That frame preserves aspect ratio, scales to the largest contained size, and is reused for pointer mapping diagnostics.
 
-The agent caps oversized capture output to a 1920-pixel long edge while preserving display aspect ratio, then sets the WebRTC sender to a higher-bitrate screen-stream profile. Capture is paced at 30 fps, ScreenCaptureKit queue depth is kept low, and the custom WebRTC bridge keeps only the newest pending frame under load so latency does not grow behind old desktop frames. The browser bitrate slider now supports up to 50 Mbps, but changes are committed on release instead of being applied continuously during drag so interaction stays responsive.
+The agent caps oversized capture output to a 1920-pixel long edge while preserving display aspect ratio, then sets the WebRTC sender to a higher-bitrate screen-stream profile. Capture is paced explicitly, ScreenCaptureKit queue depth is kept low, and the custom WebRTC bridge keeps only the newest pending frame under load so latency does not grow behind old desktop frames. The browser bitrate slider now supports up to 100 Mbps, but changes are committed on release instead of being applied continuously during drag so interaction stays responsive.
+
+The stream tuning path now supports 30/45/60 FPS targets, a bitrate ceiling up to 100 Mbps, and browser-to-agent stats feedback over the existing `macvm-control` DataChannel. The agent still prefers stable pacing and “latest frame wins” behavior over maximum raw throughput: it can lower the effective submitted FPS when browser decode stats or local stale-frame drops show the client is falling behind. Resolution changes still apply on reconnect, while bitrate and FPS changes apply at runtime.
+
+## Current Limitations
+
+- one active viewer at a time
+- text-only clipboard support
+- local-network MVP signaling only; not hardened for public internet exposure
+- low-latency tuning is not finished yet, so heavy-motion responsiveness can still regress even when the session is otherwise healthy

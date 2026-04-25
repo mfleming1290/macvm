@@ -89,4 +89,35 @@ final class InputControlTests: XCTestCase {
         XCTAssertEqual(message.sequence, 7)
         XCTAssertEqual(message.source, "browser")
     }
+
+    func testControlProtocolDecodesStreamStatsReportMessage() throws {
+        let data = Data(
+            """
+            {
+              "version": 1,
+              "type": "stream.stats.report",
+              "sequence": 9,
+              "timestampMs": 1234,
+              "stats": {
+                "decodedFrames": 120,
+                "droppedFrames": 2,
+                "estimatedFramesPerSecond": 29.5,
+                "frameWidth": 1280,
+                "frameHeight": 720,
+                "jitterMs": 12.5,
+                "roundTripTimeMs": 44.0,
+                "bitrateBps": 9000000
+              }
+            }
+            """.utf8
+        )
+
+        guard case .streamStatsReport(let message) = try ControlProtocol.decode(data) else {
+            return XCTFail("Expected a stream stats report message.")
+        }
+
+        XCTAssertEqual(message.stats.decodedFrames, 120)
+        XCTAssertEqual(message.stats.frameWidth, 1280)
+        XCTAssertEqual(message.stats.bitrateBps, 9_000_000)
+    }
 }

@@ -1,5 +1,9 @@
 # Development
 
+## Repo Tooling Note
+
+`macvm` does not currently have an app-side LLM runtime or model-selection setting. If local repo tooling or Codex-facing guidance needs an explicit coding model choice, use GPT-5.5 as the current default baseline.
+
 ## Prerequisites
 
 - macOS 14 or newer recommended
@@ -12,6 +16,18 @@
 ```sh
 npm install
 npm run dev:web
+```
+
+If the default Vite port is busy, override it with:
+
+```sh
+WEB_CLIENT_PORT=3000 npm run dev:web
+```
+
+You can also set it in [apps/web-client/.env](/Users/matt/Documents/macvm/apps/web-client/.env):
+
+```sh
+WEB_CLIENT_PORT=3000
 ```
 
 The web app is intentionally small: one connection form, connection status, one remote video surface, and compact diagnostics. Browser input capture is limited to the remote surface and sends normalized control messages over the existing WebRTC connection.
@@ -103,9 +119,10 @@ Browser-side diagnostics show:
 - remote video track state
 - inbound decoded frame count and dimensions when browser stats expose them
 - video element `readyState`, dimensions, and playback state
+- computed remote stage size and contained display rect used for rendering and pointer mapping
 - DataChannel state for the input control path
 
-For the current LiveKitWebRTC answerer path, the Mac agent starts ScreenCaptureKit first, configures a screencast `RTCVideoSource`, binds the video track to the browser offer's negotiated video transceiver as `sendOnly`, then creates the answer. Capture is explicitly paced at 30 fps, ScreenCaptureKit queue depth stays low, and the custom capturer keeps only the newest pending frame when overloaded. Avoid moving the video sender setup back to a separate pre-offer `addTrack` path unless you re-verify Safari/Chrome negotiation and decoded frame dimensions.
+For the current LiveKitWebRTC answerer path, the Mac agent starts ScreenCaptureKit first, configures a screencast `RTCVideoSource`, binds the video track to the browser offer's negotiated video transceiver as `sendOnly`, then creates the answer. Capture uses a higher ceiling internally, the submission gate enforces the current effective FPS target, ScreenCaptureKit queue depth stays low, and the custom capturer keeps only the newest pending frame when overloaded. Avoid moving the video sender setup back to a separate pre-offer `addTrack` path unless you re-verify Safari/Chrome negotiation and decoded frame dimensions.
 
 ## Browser Viewport Layout
 
@@ -115,9 +132,17 @@ The browser uses an explicit contained-frame helper instead of relying on passiv
 
 ## Video Quality Tuning
 
-The Mac agent keeps the same WebRTC sender path, but capture output is capped to a 1920-pixel long edge when the display is larger. The sender also sets a higher screen-stream bitrate target: 8 Mbps maximum, 1.5 Mbps minimum, high network priority, and maintain-resolution degradation preference.
+The Mac agent keeps the same WebRTC sender path, but capture output is capped to a 1920-pixel long edge when the display is larger. The sender applies the current runtime bitrate/FPS settings, uses high network priority, and keeps a screen-stream-friendly degradation preference.
 
 The intent is to reduce encoder pressure from very large Retina frames while giving motion more bitrate headroom. This should reduce smearing during fast desktop changes without introducing an alternate transport or buffering strategy. Browser bitrate changes are committed on release/blur instead of on every slider movement so the active session does not churn sender parameters continuously.
+
+The stream controls now support:
+
+- bitrate up to 100 Mbps, with a 20 Mbps default
+- 30 / 45 / 60 FPS runtime targets
+- reconnect-required resolution changes
+
+The agent captures with a higher internal ceiling, but the pacing gate is the authoritative submission control. Under load, the agent may lower the effective submitted FPS below the requested FPS when browser decode/network stats or local stale-frame drops show that the client cannot keep up. This keeps latency bounded instead of allowing old frames to accumulate.
 
 ## Control Path Diagnostics
 
@@ -136,6 +161,17 @@ Agent-side `/api/health` includes:
 - `control.clipboardWrites`: successful plain-text clipboard writes to `NSPasteboard`.
 - `control.lastClipboardTextLength`: latest clipboard text length processed by the agent.
 - `control.lastError`: permission, mapping, decode, or injection error details.
+
+Browser-side diagnostics now also report:
+
+- estimated inbound FPS
+- inbound dropped frames when exposed by the browser
+- estimated inbound bitrate
+- RTT and jitter when available from WebRTC stats
+
+The browser periodically reports these stats back to the agent over the existing `macvm-control` DataChannel using `stream.stats.report`. The agent uses that feedback, together with local stale-frame drops, to reduce effective submission FPS before latency grows into visible lag.
+
+This tuning path is still iterative. The current target is stable responsiveness, not maximum throughput, so the agent may intentionally lower effective submitted FPS before old frames are allowed to pile up.
 
 ## Clipboard
 
@@ -170,21 +206,23 @@ Manual verification requires a Mac with Screen Recording permission granted:
 6. Successful stream: start the web client with `npm run dev:web`, open it from another machine or browser profile, connect to `http://<mac-lan-ip>:8080`, and confirm live video appears.
 7. Frame-flow proof: while connected, confirm `/api/health` has increasing `captureFrames`, `completeFrames`, `submittedFrames`, `sourceFrames`, and `capturerFrames`, with `targetFramesPerSecond: 30`, `senderAttached: true`, and `senderTrackReadyState: "live"`.
 8. Pacing proof: during normal motion, `submittedFrames` should grow more slowly than `captureFrames`, and some `droppedPacingFrames` are expected. During overload, `droppedBackpressureFrames` may increase, but it should not explode alongside growing end-to-end lag.
-9. Browser decode proof: confirm the Media Diagnostics panel reports a live remote track and non-zero video element dimensions.
-10. Viewport fit: confirm the full remote desktop is visible without page scrolling.
-11. Resize behavior: resize the browser and confirm the video remains centered, aspect-correct, and fully visible.
-12. Motion responsiveness: at 720p or 1080p, move windows quickly and confirm the session feels smoother and less laggy than before, without visible backlog buildup.
-13. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
-14. Input channel: confirm the browser diagnostics report control channel `open` after connection.
-15. Mouse input: move over the remote video, left click, right click, and scroll; confirm the Mac responds and `/api/health` shows increasing `control.receivedMessages` and `control.injectedEvents`.
-16. Mapping accuracy: click near all four corners and the center of the visible remote desktop, including after resizing the browser, and confirm the Mac pointer lands accurately.
-17. Keyboard input: focus a simple text field on the Mac through the remote session, type basic letters/numbers, press Enter/Escape/arrow keys, and verify a basic modifier shortcut such as Command+A.
-18. Clipboard send: type text into the browser clipboard panel, click **Send To Mac**, then paste on the Mac and confirm the text matches.
-19. Clipboard fetch: copy plain text on the Mac, click **Fetch Mac Clipboard**, and confirm the fetched text appears in the browser panel.
-20. Clipboard copy-back: click **Copy To Browser** and confirm the browser clipboard now contains the fetched Mac text when browser permissions allow it.
-21. Empty/non-text clipboard: clear the Mac clipboard or copy non-text content, fetch again, and confirm the browser shows a clear clipboard error instead of stale text.
-22. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
-23. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
-24. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
-25. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
-26. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.
+9. Feedback proof: while connected, confirm `/api/health` includes client stats such as `clientEstimatedFramesPerSecond`, `clientRoundTripTimeMs`, and `clientBitrateBps` once the browser has been receiving frames for a moment.
+10. Runtime tuning: change bitrate and FPS in the browser, confirm the values commit cleanly instead of churning during slider drag, and confirm `/api/health` reflects the requested/effective FPS fields.
+11. Browser decode proof: confirm the Media Diagnostics panel reports a live remote track and non-zero video element dimensions.
+12. Viewport fit: confirm the full remote desktop is visible without page scrolling.
+13. Resize behavior: resize the browser and confirm the video remains centered, aspect-correct, and fully visible.
+14. Motion responsiveness: at 720p or 1080p, move windows quickly and confirm the session feels smoother and less laggy than before, without visible backlog buildup.
+15. Disconnect/reconnect: click Disconnect, then Connect again, and confirm the browser receives a fresh stream without restarting the agent.
+16. Input channel: confirm the browser diagnostics report control channel `open` after connection.
+17. Mouse input: move over the remote video, left click, right click, and scroll; confirm the Mac responds and `/api/health` shows increasing `control.receivedMessages` and `control.injectedEvents`.
+18. Mapping accuracy: click near all four corners and the center of the visible remote desktop, including after resizing the browser, and confirm the Mac pointer lands accurately.
+19. Keyboard input: focus a simple text field on the Mac through the remote session, type basic letters/numbers, press Enter/Escape/arrow keys, and verify a basic modifier shortcut such as Command+A.
+20. Clipboard send: type text into the browser clipboard panel, click **Send To Mac**, then paste on the Mac and confirm the text matches.
+21. Clipboard fetch: copy plain text on the Mac, click **Fetch Mac Clipboard**, and confirm the fetched text appears in the browser panel.
+22. Clipboard copy-back: click **Copy To Browser** and confirm the browser clipboard now contains the fetched Mac text when browser permissions allow it.
+23. Empty/non-text clipboard: clear the Mac clipboard or copy non-text content, fetch again, and confirm the browser shows a clear clipboard error instead of stale text.
+24. Stuck-state cleanup: hold a key or mouse button, blur/close/disconnect the browser, and confirm the Mac does not remain stuck in a pressed state.
+25. One-viewer behavior: if another tab or machine connects, older tabs may lose the signaling session; they should stop ICE polling instead of spamming repeated `session_not_found` errors.
+26. Agent unreachable failure: stop the agent, click Connect, and confirm the browser reports that the Mac agent cannot be reached.
+27. Permission failure: revoke Screen Recording for **macvm Agent**, restart the app, click Connect, and confirm the browser reports that Screen Recording permission is missing. Revoke Accessibility and confirm video still works while control diagnostics show an actionable permission error.
+28. CORS/preflight: from the web dev-server origin, confirm browser requests to `http://<mac-lan-ip>:8080/api/*` are not blocked by CORS.

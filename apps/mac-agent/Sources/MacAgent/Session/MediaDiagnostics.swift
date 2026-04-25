@@ -9,6 +9,8 @@ struct MediaDiagnostics: Codable {
     var droppedPacingFrames: Int
     var droppedBackpressureFrames: Int
     var targetFramesPerSecond: Int
+    var requestedFramesPerSecond: Int
+    var effectiveFramesPerSecond: Int
     var capturerFrames: Int
     var sourceFrames: Int
     var lastFrameWidth: Int?
@@ -25,6 +27,14 @@ struct MediaDiagnostics: Codable {
     var localCandidates: Int
     var signalingState: String
     var iceConnectionState: String
+    var clientDecodedFrames: Int?
+    var clientDroppedFrames: Int?
+    var clientEstimatedFramesPerSecond: Double?
+    var clientFrameWidth: Int?
+    var clientFrameHeight: Int?
+    var clientJitterMs: Double?
+    var clientRoundTripTimeMs: Double?
+    var clientBitrateBps: Int?
 
     enum CodingKeys: String, CodingKey {
         case captureFrames
@@ -35,6 +45,8 @@ struct MediaDiagnostics: Codable {
         case droppedPacingFrames
         case droppedBackpressureFrames
         case targetFramesPerSecond
+        case requestedFramesPerSecond
+        case effectiveFramesPerSecond
         case capturerFrames
         case sourceFrames
         case lastFrameWidth
@@ -51,6 +63,14 @@ struct MediaDiagnostics: Codable {
         case localCandidates
         case signalingState
         case iceConnectionState
+        case clientDecodedFrames
+        case clientDroppedFrames
+        case clientEstimatedFramesPerSecond
+        case clientFrameWidth
+        case clientFrameHeight
+        case clientJitterMs
+        case clientRoundTripTimeMs
+        case clientBitrateBps
     }
 
     static let empty = MediaDiagnostics(
@@ -62,6 +82,8 @@ struct MediaDiagnostics: Codable {
         droppedPacingFrames: 0,
         droppedBackpressureFrames: 0,
         targetFramesPerSecond: 0,
+        requestedFramesPerSecond: 0,
+        effectiveFramesPerSecond: 0,
         capturerFrames: 0,
         sourceFrames: 0,
         lastFrameWidth: nil,
@@ -77,7 +99,15 @@ struct MediaDiagnostics: Codable {
         senderTrackReadyState: "none",
         localCandidates: 0,
         signalingState: "new",
-        iceConnectionState: "new"
+        iceConnectionState: "new",
+        clientDecodedFrames: nil,
+        clientDroppedFrames: nil,
+        clientEstimatedFramesPerSecond: nil,
+        clientFrameWidth: nil,
+        clientFrameHeight: nil,
+        clientJitterMs: nil,
+        clientRoundTripTimeMs: nil,
+        clientBitrateBps: nil
     )
 
     func encode(to encoder: Encoder) throws {
@@ -90,6 +120,8 @@ struct MediaDiagnostics: Codable {
         try container.encode(droppedPacingFrames, forKey: .droppedPacingFrames)
         try container.encode(droppedBackpressureFrames, forKey: .droppedBackpressureFrames)
         try container.encode(targetFramesPerSecond, forKey: .targetFramesPerSecond)
+        try container.encode(requestedFramesPerSecond, forKey: .requestedFramesPerSecond)
+        try container.encode(effectiveFramesPerSecond, forKey: .effectiveFramesPerSecond)
         try container.encode(capturerFrames, forKey: .capturerFrames)
         try container.encode(sourceFrames, forKey: .sourceFrames)
         try container.encode(lastFrameWidth, forKey: .lastFrameWidth)
@@ -106,5 +138,13 @@ struct MediaDiagnostics: Codable {
         try container.encode(localCandidates, forKey: .localCandidates)
         try container.encode(signalingState, forKey: .signalingState)
         try container.encode(iceConnectionState, forKey: .iceConnectionState)
+        try container.encode(clientDecodedFrames, forKey: .clientDecodedFrames)
+        try container.encode(clientDroppedFrames, forKey: .clientDroppedFrames)
+        try container.encode(clientEstimatedFramesPerSecond, forKey: .clientEstimatedFramesPerSecond)
+        try container.encode(clientFrameWidth, forKey: .clientFrameWidth)
+        try container.encode(clientFrameHeight, forKey: .clientFrameHeight)
+        try container.encode(clientJitterMs, forKey: .clientJitterMs)
+        try container.encode(clientRoundTripTimeMs, forKey: .clientRoundTripTimeMs)
+        try container.encode(clientBitrateBps, forKey: .clientBitrateBps)
     }
 }

@@ -5,14 +5,17 @@ final class ControlChannelHandler: NSObject {
     private let clipboardQueue = DispatchQueue(label: "macvm.clipboard")
     private let clipboardService = ClipboardService()
     private let inputController: InputController
+    private let onClientStatsReport: (StreamClientStats) -> Void
     private let onStreamQualityUpdate: (StreamQualitySettings) -> Void
     private var dataChannel: LKRTCDataChannel?
 
     init(
         inputController: InputController,
+        onClientStatsReport: @escaping (StreamClientStats) -> Void,
         onStreamQualityUpdate: @escaping (StreamQualitySettings) -> Void
     ) {
         self.inputController = inputController
+        self.onClientStatsReport = onClientStatsReport
         self.onStreamQualityUpdate = onStreamQualityUpdate
     }
 
@@ -54,6 +57,8 @@ extension ControlChannelHandler: LKRTCDataChannelDelegate {
             switch message {
             case .streamQuality(let message):
                 onStreamQualityUpdate(message.settings)
+            case .streamStatsReport(let message):
+                onClientStatsReport(message.stats)
             case .clipboardSet(let message):
                 handleClipboardSet(message)
             case .clipboardGet(let message):

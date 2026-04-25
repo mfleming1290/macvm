@@ -16,14 +16,24 @@ final class WebRTCSession: NSObject {
     private var selectedBitrateBps = StreamQualitySettings.defaultSettings.safeMaxBitrateBps
     private var sender: LKRTCRtpSender?
     private var signalingState = "new"
+    private let onClientStatsReport: (StreamClientStats) -> Void
+    private let onStreamQualityUpdate: (StreamQualitySettings) -> Void
     private lazy var controlChannelHandler = ControlChannelHandler(
         inputController: inputController,
+        onClientStatsReport: { [weak self] stats in
+            self?.onClientStatsReport(stats)
+        },
         onStreamQualityUpdate: { [weak self] settings in
-            self?.updateStreamQuality(settings)
+            self?.handleStreamQualityUpdate(settings)
         }
     )
 
-    override init() {
+    init(
+        onClientStatsReport: @escaping (StreamClientStats) -> Void = { _ in },
+        onStreamQualityUpdate: @escaping (StreamQualitySettings) -> Void = { _ in }
+    ) {
+        self.onClientStatsReport = onClientStatsReport
+        self.onStreamQualityUpdate = onStreamQualityUpdate
         LKRTCInitializeSSL()
 
         let encoderFactory = LKRTCDefaultVideoEncoderFactory()
@@ -174,10 +184,11 @@ final class WebRTCSession: NSObject {
         )
     }
 
-    private func updateStreamQuality(_ settings: StreamQualitySettings) {
+    private func handleStreamQualityUpdate(_ settings: StreamQualitySettings) {
+        onStreamQualityUpdate(settings)
         selectedBitrateBps = settings.safeMaxBitrateBps
-        applySenderEncoding(bitrateBps: settings.safeMaxBitrateBps, framesPerSecond: 30)
-        print("macvm: updated stream bitrate to \(settings.safeMaxBitrateBps) bps")
+        applySenderEncoding(bitrateBps: settings.safeMaxBitrateBps, framesPerSecond: settings.safeFramesPerSecond)
+        print("macvm: updated stream bitrate to \(settings.safeMaxBitrateBps) bps at \(settings.safeFramesPerSecond) fps")
     }
 
     private func applySenderEncoding(bitrateBps: Int, framesPerSecond: Int) {

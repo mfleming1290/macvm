@@ -18,6 +18,12 @@ Whenever architecture, transport choices, signaling behavior, protocol contracts
 
 Do not leave obsolete architecture guidance in place after implementation changes.
 
+## Repo Tooling Baseline
+
+`macvm` does not currently ship any app-side OpenAI integration or runtime model selection.
+
+If repo tooling, Codex guidance, or future local automations need an explicit coding model choice, treat GPT-5.5 as the current default baseline. Do not add model-specific config files or environment variables unless a script, automation, or runtime path actually consumes them.
+
 ## Product Goal
 
 The product is a personal, local-first remote desktop tool for a Mac, with a browser-based viewer as the first client.
@@ -43,13 +49,13 @@ The first working version proves the media and input stack:
 - minimal HTTP signaling for offer, answer, and ICE candidates
 - WebRTC DataChannel input control bound to the active peer connection
 - explicit text-only clipboard set/get over the existing WebRTC DataChannel
+- runtime bitrate/FPS tuning and browser-to-agent stream stats feedback over the existing WebRTC DataChannel
 - mouse movement, left/right button, wheel, keyboard key down/up, and basic modifiers
 - normalized browser coordinate mapping into the captured display
 - one active viewer session
 - explicit Screen Recording and Accessibility permission handling
 
-Input control is intentionally MVP-focused. File transfer, clipboard sync, multi-viewer control, and exhaustive keyboard-layout/IME support remain out of scope.
-Input and clipboard support are intentionally MVP-focused. Text clipboard set/get is supported, but file transfer, rich clipboard formats, multi-viewer control, and exhaustive keyboard-layout/IME support remain out of scope.
+Input and clipboard support are intentionally MVP-focused. Text clipboard set/get and optional best-effort browser-triggered sync are supported, but file transfer, rich clipboard formats, multi-viewer control, and exhaustive keyboard-layout/IME support remain out of scope.
 
 Out of scope for the current MVP:
 
@@ -60,7 +66,7 @@ Out of scope for the current MVP:
 - enterprise auth
 - cloud relay infrastructure beyond minimal signaling if needed later
 - polished installers and production signing automation
-- clipboard sync
+- rich clipboard formats and always-on clipboard sync
 - multi-monitor orchestration
 
 ## Platform Architecture
@@ -98,7 +104,7 @@ The stack currently has four active planes:
 - Capture plane: ScreenCaptureKit captures the Mac display.
 - Media transport plane: WebRTC transports live video to the browser.
 - Session/signaling plane: the Mac agent hosts minimal HTTP endpoints for offer, answer, ICE, health, and teardown.
-- Control plane: the browser sends normalized input messages over a WebRTC DataChannel and the Mac agent maps/injects them through CoreGraphics.
+- Control plane: the browser sends normalized input, stream-tuning, browser-stats, and clipboard messages over a WebRTC DataChannel and the Mac agent maps/injects input, applies stream settings, and services clipboard requests.
 
 ## Technology Direction
 
@@ -198,6 +204,7 @@ Rules:
 - surface useful diagnostics for permission, session, and negotiation failures
 - keep the browser remote surface viewport-bound with an explicit contained-frame calculation; coordinate mapping must use that computed rendered frame, not the window
 - cap oversized capture output and tune sender bitrate before considering larger streaming rewrites
+- prefer stable pacing with latest-frame-wins dropping over unconstrained throughput; browser decode/network stats may feed back into the agent to lower effective submission FPS under load
 - avoid over-engineered adaptive bitrate before the base stream is reliable
 
 ## Testing and Verification

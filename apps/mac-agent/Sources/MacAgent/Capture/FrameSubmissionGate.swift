@@ -2,7 +2,7 @@ import Foundation
 
 struct FrameSubmissionGate {
     private(set) var lastSubmittedTimestampNs: Int64?
-    let targetFramesPerSecond: Int
+    private(set) var targetFramesPerSecond: Int
 
     init(targetFramesPerSecond: Int) {
         self.targetFramesPerSecond = max(1, targetFramesPerSecond)
@@ -25,5 +25,9 @@ struct FrameSubmissionGate {
 
     mutating func reset() {
         lastSubmittedTimestampNs = nil
+    }
+
+    mutating func updateTargetFramesPerSecond(_ targetFramesPerSecond: Int) {
+        self.targetFramesPerSecond = max(1, targetFramesPerSecond)
     }
 }

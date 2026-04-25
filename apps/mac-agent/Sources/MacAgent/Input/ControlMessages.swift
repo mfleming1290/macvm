@@ -116,6 +116,14 @@ struct ClipboardErrorControlMessage: Codable {
     let message: String
 }
 
+struct StreamStatsReportControlMessage: Codable {
+    let version: Int
+    let type: String
+    let sequence: Int
+    let timestampMs: Double
+    let stats: StreamClientStats
+}
+
 enum ControlMessage {
     case mouseMove(MouseMoveControlMessage)
     case mouseButton(MouseButtonControlMessage)
@@ -127,6 +135,7 @@ enum ControlMessage {
     case clipboardGet(ClipboardGetControlMessage)
     case clipboardValue(ClipboardValueControlMessage)
     case clipboardError(ClipboardErrorControlMessage)
+    case streamStatsReport(StreamStatsReportControlMessage)
 
     var type: String {
         switch self {
@@ -149,6 +158,8 @@ enum ControlMessage {
         case .clipboardValue(let message):
             message.type
         case .clipboardError(let message):
+            message.type
+        case .streamStatsReport(let message):
             message.type
         }
     }
@@ -190,6 +201,8 @@ enum ControlProtocol {
             return .clipboardValue(try JSONDecoder().decode(ClipboardValueControlMessage.self, from: data))
         case "clipboard.error":
             return .clipboardError(try JSONDecoder().decode(ClipboardErrorControlMessage.self, from: data))
+        case "stream.stats.report":
+            return .streamStatsReport(try JSONDecoder().decode(StreamStatsReportControlMessage.self, from: data))
         default:
             throw ControlProtocolError.unsupportedType(envelope.type)
         }
@@ -202,7 +215,11 @@ enum ControlProtocol {
     }
 
     private static func validateQuality(_ settings: StreamQualitySettings) throws {
-        guard settings.maxBitrateBps >= 1_000_000, settings.maxBitrateBps <= 50_000_000 else {
+        guard settings.maxBitrateBps >= 1_000_000, settings.maxBitrateBps <= 100_000_000 else {
+            throw ControlProtocolError.invalidQuality
+        }
+
+        guard [30, 45, 60].contains(settings.framesPerSecond) else {
             throw ControlProtocolError.invalidQuality
         }
     }

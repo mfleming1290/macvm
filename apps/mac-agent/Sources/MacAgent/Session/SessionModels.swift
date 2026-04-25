@@ -25,15 +25,28 @@ struct CreateSessionRequest: Codable {
 
 struct StreamQualitySettings: Codable, Equatable {
     let maxBitrateBps: Int
+    let framesPerSecond: Int
     let resolutionPreset: String
 
     static let defaultSettings = StreamQualitySettings(
-        maxBitrateBps: 8_000_000,
+        maxBitrateBps: 20_000_000,
+        framesPerSecond: 30,
         resolutionPreset: "1080p"
     )
 
     var safeMaxBitrateBps: Int {
-        min(50_000_000, max(1_000_000, maxBitrateBps))
+        min(100_000_000, max(1_000_000, maxBitrateBps))
+    }
+
+    var safeFramesPerSecond: Int {
+        switch framesPerSecond {
+        case 45:
+            45
+        case 60:
+            60
+        default:
+            30
+        }
     }
 
     var maxLongEdge: Int? {
@@ -48,6 +61,17 @@ struct StreamQualitySettings: Codable, Equatable {
             1_920
         }
     }
+}
+
+struct StreamClientStats: Codable {
+    let decodedFrames: Int?
+    let droppedFrames: Int?
+    let estimatedFramesPerSecond: Double?
+    let frameWidth: Int?
+    let frameHeight: Int?
+    let jitterMs: Double?
+    let roundTripTimeMs: Double?
+    let bitrateBps: Int?
 }
 
 struct CreateSessionResponse: Codable {

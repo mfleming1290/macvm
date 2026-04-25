@@ -33,7 +33,13 @@ const emptyConnectionDiagnostics: ConnectionDiagnostics = {
   inboundFramesDecoded: null,
   inboundFrameWidth: null,
   inboundFrameHeight: null,
+  inboundFramesDropped: null,
+  estimatedInboundFramesPerSecond: null,
+  currentRoundTripTimeMs: null,
+  currentJitterMs: null,
+  estimatedInboundBitrateBps: null,
   selectedBitrateBps: null,
+  selectedFramesPerSecond: null,
   selectedResolutionPreset: null,
 };
 
@@ -53,7 +59,8 @@ const emptyVideoDiagnostics: VideoDiagnostics = {
 };
 
 const defaultStreamSettings: StreamQualitySettings = {
-  maxBitrateBps: 8_000_000,
+  maxBitrateBps: 20_000_000,
+  framesPerSecond: 30,
   resolutionPreset: "1080p",
 };
 
@@ -333,12 +340,21 @@ export default function App() {
     };
     setStreamSettings(nextSettings);
     if (connectionState === "connected") {
-      setError("Resolution changes apply on the next reconnect. Bitrate changes apply immediately.");
+      setError("Resolution changes apply on the next reconnect. Bitrate and FPS changes apply immediately.");
     }
   }
 
+  function updateFramesPerSecond(nextFramesPerSecond: 30 | 45 | 60) {
+    const nextSettings = {
+      ...streamSettings,
+      framesPerSecond: nextFramesPerSecond,
+    };
+    setStreamSettings(nextSettings);
+    sendStreamQuality(connectionRef.current, nextSettings);
+  }
+
   function sendStreamQuality(connection: AgentConnection | null, settings: StreamQualitySettings) {
-    const settingsKey = `${settings.resolutionPreset}:${settings.maxBitrateBps}`;
+    const settingsKey = `${settings.resolutionPreset}:${settings.maxBitrateBps}:${settings.framesPerSecond}`;
     if (settingsKey === lastSentStreamSettingsRef.current) {
       return;
     }
@@ -440,7 +456,7 @@ export default function App() {
             id="bitrate"
             type="range"
             min="2"
-            max="50"
+            max="100"
             step={bitrateStepMbps}
             value={pendingBitrateMbps}
             onChange={(event) => handleBitrateDrag(Number(event.target.value))}
@@ -449,6 +465,16 @@ export default function App() {
             onKeyUp={commitPendingBitrate}
             onBlur={commitPendingBitrate}
           />
+          <label htmlFor="stream-fps">FPS</label>
+          <select
+            id="stream-fps"
+            value={streamSettings.framesPerSecond}
+            onChange={(event) => updateFramesPerSecond(Number(event.target.value) as 30 | 45 | 60)}
+          >
+            <option value="30">30</option>
+            <option value="45">45</option>
+            <option value="60">60</option>
+          </select>
           <label htmlFor="resolution-preset">Resolution</label>
           <select
             id="resolution-preset"
@@ -553,6 +579,19 @@ export default function App() {
             {connectionDiagnostics.inboundFramesDecoded ?? "n/a"} frames at{" "}
             {connectionDiagnostics.inboundFrameWidth ?? 0}x{connectionDiagnostics.inboundFrameHeight ?? 0}
           </strong>
+          <span>Inbound pacing</span>
+          <strong>
+            {connectionDiagnostics.estimatedInboundFramesPerSecond?.toFixed(1) ?? "n/a"} fps, dropped{" "}
+            {connectionDiagnostics.inboundFramesDropped ?? "n/a"}
+          </strong>
+          <span>Network</span>
+          <strong>
+            RTT {connectionDiagnostics.currentRoundTripTimeMs?.toFixed(1) ?? "n/a"} ms, jitter{" "}
+            {connectionDiagnostics.currentJitterMs?.toFixed(1) ?? "n/a"} ms, bitrate{" "}
+            {connectionDiagnostics.estimatedInboundBitrateBps
+              ? `${(connectionDiagnostics.estimatedInboundBitrateBps / 1_000_000).toFixed(1)} Mbps`
+              : "n/a"}
+          </strong>
           <span>Intrinsic video</span>
           <strong>
             readyState {videoDiagnostics.readyState}, {videoDiagnostics.intrinsicWidth}x
@@ -574,7 +613,8 @@ export default function App() {
           <span>Stream settings</span>
           <strong>
             {connectionDiagnostics.selectedResolutionPreset ?? streamSettings.resolutionPreset},{" "}
-            {(connectionDiagnostics.selectedBitrateBps ?? streamSettings.maxBitrateBps) / 1_000_000} Mbps
+            {(connectionDiagnostics.selectedBitrateBps ?? streamSettings.maxBitrateBps) / 1_000_000} Mbps,{" "}
+            {connectionDiagnostics.selectedFramesPerSecond ?? streamSettings.framesPerSecond} fps
           </strong>
           <span>Playback</span>
           <strong>{videoDiagnostics.playbackError ?? "ok"}</strong>

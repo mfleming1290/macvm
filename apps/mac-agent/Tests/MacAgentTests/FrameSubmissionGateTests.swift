@@ -27,4 +27,14 @@ final class FrameSubmissionGateTests: XCTestCase {
 
         XCTAssertTrue(gate.shouldSubmit(timestampNs: 1_000))
     }
+
+    func testTargetFramesPerSecondCanBeUpdated() {
+        var gate = FrameSubmissionGate(targetFramesPerSecond: 30)
+
+        XCTAssertTrue(gate.shouldSubmit(timestampNs: 0))
+        gate.updateTargetFramesPerSecond(60)
+
+        XCTAssertFalse(gate.shouldSubmit(timestampNs: 10_000_000))
+        XCTAssertTrue(gate.shouldSubmit(timestampNs: 17_000_000))
+    }
 }

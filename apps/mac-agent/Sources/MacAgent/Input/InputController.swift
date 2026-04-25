@@ -40,7 +40,7 @@ final class InputController {
             switch message {
             case .reset:
                 resetPressedState()
-            case .streamQuality:
+            case .streamQuality, .streamStatsReport:
                 break
             case .clipboardSet, .clipboardGet, .clipboardValue, .clipboardError:
                 break

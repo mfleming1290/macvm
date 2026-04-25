@@ -163,7 +163,7 @@ button.secondary {
 
 .stream-controls {
   display: grid;
-  grid-template-columns: auto minmax(120px, 1fr) auto minmax(90px, auto);
+  grid-template-columns: auto minmax(120px, 1fr) auto minmax(90px, auto) auto minmax(90px, auto);
   gap: 8px 10px;
   align-items: center;
   color: #bdb4a6;

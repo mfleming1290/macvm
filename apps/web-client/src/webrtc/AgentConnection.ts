@@ -11,6 +11,7 @@ import {
   HealthResponse,
   IceCandidatesResponse,
   PROTOCOL_VERSION,
+  StreamClientStats,
   StreamQualitySettings,
   isCreateSessionResponse,
   isControlMessage,
@@ -46,8 +47,20 @@ export interface ConnectionDiagnostics {
   inboundFramesDecoded: number | null;
   inboundFrameWidth: number | null;
   inboundFrameHeight: number | null;
+  inboundFramesDropped: number | null;
+  estimatedInboundFramesPerSecond: number | null;
+  currentRoundTripTimeMs: number | null;
+  currentJitterMs: number | null;
+  estimatedInboundBitrateBps: number | null;
   selectedBitrateBps: number | null;
+  selectedFramesPerSecond: number | null;
   selectedResolutionPreset: string | null;
+}
+
+interface InboundStatsSnapshot {
+  bytesReceived: number;
+  framesDecoded: number;
+  timestampMs: number;
 }
 
 export class AgentConnection {
@@ -59,6 +72,8 @@ export class AgentConnection {
   private isDisconnecting = false;
   private pendingLocalCandidates: RTCIceCandidate[] = [];
   private peer: RTCPeerConnection | undefined;
+  private lastInboundStatsSnapshot: InboundStatsSnapshot | undefined;
+  private lastStatsReportAtMs = 0;
   private streamSettings: StreamQualitySettings;
   private sessionId: string | undefined;
   private controlChannel: RTCDataChannel | undefined;
@@ -330,7 +345,13 @@ export class AgentConnection {
         inboundFramesDecoded: null,
         inboundFrameWidth: null,
         inboundFrameHeight: null,
+        inboundFramesDropped: null,
+        estimatedInboundFramesPerSecond: null,
+        currentRoundTripTimeMs: null,
+        currentJitterMs: null,
+        estimatedInboundBitrateBps: null,
         selectedBitrateBps: null,
+        selectedFramesPerSecond: null,
         selectedResolutionPreset: null,
       });
       return;
@@ -348,13 +369,36 @@ export class AgentConnection {
       inboundFramesDecoded: null,
       inboundFrameWidth: null,
       inboundFrameHeight: null,
+      inboundFramesDropped: null,
+      estimatedInboundFramesPerSecond: null,
+      currentRoundTripTimeMs: null,
+      currentJitterMs: null,
+      estimatedInboundBitrateBps: null,
       selectedBitrateBps: this.streamSettings.maxBitrateBps,
+      selectedFramesPerSecond: this.streamSettings.framesPerSecond,
       selectedResolutionPreset: this.streamSettings.resolutionPreset,
+    };
+
+    const statsReport: StreamClientStats = {
+      decodedFrames: null,
+      droppedFrames: null,
+      estimatedFramesPerSecond: null,
+      frameWidth: null,
+      frameHeight: null,
+      jitterMs: null,
+      roundTripTimeMs: null,
+      bitrateBps: null,
     };
 
     if (videoReceiver) {
       const stats = await videoReceiver.getStats();
+      const nowMs = performance.now();
       for (const report of stats.values()) {
+        if (report.type === "candidate-pair" && report.state === "succeeded" && typeof report.currentRoundTripTime === "number") {
+          diagnostics.currentRoundTripTimeMs = report.currentRoundTripTime * 1000;
+          statsReport.roundTripTimeMs = diagnostics.currentRoundTripTimeMs;
+        }
+
         if (report.type !== "inbound-rtp" || report.kind !== "video") {
           continue;
         }
@@ -362,10 +406,53 @@ export class AgentConnection {
         diagnostics.inboundFramesDecoded = typeof report.framesDecoded === "number" ? report.framesDecoded : null;
         diagnostics.inboundFrameWidth = typeof report.frameWidth === "number" ? report.frameWidth : null;
         diagnostics.inboundFrameHeight = typeof report.frameHeight === "number" ? report.frameHeight : null;
+        diagnostics.inboundFramesDropped = typeof report.framesDropped === "number" ? report.framesDropped : null;
+        diagnostics.currentJitterMs = typeof report.jitter === "number" ? report.jitter * 1000 : null;
+
+        statsReport.decodedFrames = diagnostics.inboundFramesDecoded;
+        statsReport.droppedFrames = diagnostics.inboundFramesDropped;
+        statsReport.frameWidth = diagnostics.inboundFrameWidth;
+        statsReport.frameHeight = diagnostics.inboundFrameHeight;
+        statsReport.jitterMs = diagnostics.currentJitterMs;
+
+        if (typeof report.bytesReceived === "number" && typeof report.framesDecoded === "number") {
+          const lastSnapshot = this.lastInboundStatsSnapshot;
+          if (lastSnapshot) {
+            const elapsedMs = nowMs - lastSnapshot.timestampMs;
+            if (elapsedMs > 0) {
+              const bytesDelta = report.bytesReceived - lastSnapshot.bytesReceived;
+              const framesDelta = report.framesDecoded - lastSnapshot.framesDecoded;
+              diagnostics.estimatedInboundBitrateBps = Math.max(0, Math.round((bytesDelta * 8 * 1000) / elapsedMs));
+              diagnostics.estimatedInboundFramesPerSecond = Math.max(0, (framesDelta * 1000) / elapsedMs);
+              statsReport.bitrateBps = diagnostics.estimatedInboundBitrateBps;
+              statsReport.estimatedFramesPerSecond = diagnostics.estimatedInboundFramesPerSecond;
+            }
+          }
+
+          this.lastInboundStatsSnapshot = {
+            bytesReceived: report.bytesReceived,
+            framesDecoded: report.framesDecoded,
+            timestampMs: nowMs,
+          };
+        }
       }
     }
 
     this.events.onDiagnostics(diagnostics);
+
+    if (
+      this.controlChannel?.readyState === "open" &&
+      performance.now() - this.lastStatsReportAtMs >= 1000
+    ) {
+      this.lastStatsReportAtMs = performance.now();
+      this.sendControlMessage({
+        version: PROTOCOL_VERSION,
+        type: "stream.stats.report",
+        sequence: Date.now(),
+        timestampMs: Date.now(),
+        stats: statsReport,
+      });
+    }
   }
 
   private async sendIceCandidate(candidate: RTCIceCandidate): Promise<void> {

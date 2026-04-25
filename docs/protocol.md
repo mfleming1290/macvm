@@ -41,6 +41,9 @@ Response:
     "receivedMessages": 0,
     "injectedEvents": 0,
     "resetCount": 0,
+    "clipboardReads": 0,
+    "clipboardWrites": 0,
+    "lastClipboardTextLength": null,
     "pressedKeys": 0,
     "pressedButtons": 0,
     "lastMessageType": null,
@@ -60,8 +63,11 @@ The `media` object reports live capture and sender diagnostics. The most useful 
 - `droppedPacingFrames`: complete frames dropped to hold the target cadence
 - `droppedBackpressureFrames`: stale frames discarded when the WebRTC capturer is still busy
 - `targetFramesPerSecond`: current pacing target
+- `requestedFramesPerSecond`: browser-selected FPS target
+- `effectiveFramesPerSecond`: current agent submission FPS after load adaptation
 - `sourceFrames`: frames handed into the custom WebRTC capturer
 - `capturerFrames`: frames actually delivered into the WebRTC video source
+- `clientDecodedFrames`, `clientEstimatedFramesPerSecond`, `clientRoundTripTimeMs`, `clientBitrateBps`: browser receive-side feedback reported over `stream.stats.report`
 
 `status` may be:
 
@@ -91,6 +97,37 @@ Request:
 ## WebRTC DataChannel Messages
 
 The browser and agent reuse the `macvm-control` WebRTC DataChannel for input, stream settings, and clipboard.
+
+`stream.quality.update` now carries:
+
+- `maxBitrateBps`: 1 Mbps to 100 Mbps
+- `framesPerSecond`: `30`, `45`, or `60`
+- `resolutionPreset`: `native`, `1440p`, `1080p`, or `720p`
+
+Bitrate and FPS updates apply at runtime. Resolution changes are still reconnect-based in the current MVP.
+
+### `stream.stats.report`
+
+Browser periodically reports live receive-side stats back to the agent over the same DataChannel.
+
+```json
+{
+  "version": 1,
+  "type": "stream.stats.report",
+  "sequence": 301,
+  "timestampMs": 1713926401000,
+  "stats": {
+    "decodedFrames": 840,
+    "droppedFrames": 12,
+    "estimatedFramesPerSecond": 29.4,
+    "frameWidth": 1280,
+    "frameHeight": 720,
+    "jitterMs": 8.5,
+    "roundTripTimeMs": 42.0,
+    "bitrateBps": 14500000
+  }
+}
+```
 
 Clipboard messages are explicit and text-only:
 

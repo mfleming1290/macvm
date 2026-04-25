@@ -64,7 +64,18 @@ final class SessionManager {
         await closeActiveSession()
 
         let sessionId = UUID().uuidString
-        let webRTCSession = WebRTCSession()
+        let webRTCSession = WebRTCSession(
+            onClientStatsReport: { [weak self] stats in
+                guard let self else {
+                    return
+                }
+                let localDroppedBackpressureFrames = self.activeSession?.webRTCSession.diagnostics.droppedBackpressureFrames ?? 0
+                self.captureService.applyClientStats(stats, localDroppedBackpressureFrames: localDroppedBackpressureFrames)
+            },
+            onStreamQualityUpdate: { [weak self] settings in
+                self?.captureService.updateStreamQuality(settings)
+            }
+        )
         activeSession = ActiveSession(id: sessionId, webRTCSession: webRTCSession)
         setStatus("Negotiating")
 

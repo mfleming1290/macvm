@@ -6,7 +6,6 @@ import ScreenCaptureKit
 
 final class ScreenCaptureService: NSObject, SCStreamOutput {
     var onFrame: ((CMSampleBuffer) -> Void)?
-    private let targetFramesPerSecond = 30
 
     private let diagnosticsLock = NSLock()
     private let outputQueue = DispatchQueue(label: "macvm.capture.output")
@@ -17,10 +16,14 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
     private var droppedIncompleteFrames = 0
     private var droppedPacingFrames = 0
     private var currentDisplayFrame = CGRect(x: 0, y: 0, width: 1, height: 1)
+    private var effectiveFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
     private var lastFrameWidth: Int?
     private var lastFrameHeight: Int?
     private var lastPixelFormat: String?
-    private var submissionGate = FrameSubmissionGate(targetFramesPerSecond: 30)
+    private var lastObservedBackpressureFrames = 0
+    private var requestedFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
+    private var latestClientStats: StreamClientStats?
+    private var submissionGate = FrameSubmissionGate(targetFramesPerSecond: StreamQualitySettings.defaultSettings.safeFramesPerSecond)
     private var selectedStreamMaxLongEdge: Int?
     private var sourceDisplayHeight: Int?
     private var sourceDisplayWidth: Int?
@@ -39,13 +42,23 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         diagnostics.droppedFrames = droppedFrames
         diagnostics.droppedIncompleteFrames = droppedIncompleteFrames
         diagnostics.droppedPacingFrames = droppedPacingFrames
-        diagnostics.targetFramesPerSecond = targetFramesPerSecond
+        diagnostics.targetFramesPerSecond = effectiveFramesPerSecond
+        diagnostics.requestedFramesPerSecond = requestedFramesPerSecond
+        diagnostics.effectiveFramesPerSecond = effectiveFramesPerSecond
         diagnostics.lastFrameWidth = lastFrameWidth
         diagnostics.lastFrameHeight = lastFrameHeight
         diagnostics.lastPixelFormat = lastPixelFormat
         diagnostics.sourceDisplayWidth = sourceDisplayWidth
         diagnostics.sourceDisplayHeight = sourceDisplayHeight
         diagnostics.selectedStreamMaxLongEdge = selectedStreamMaxLongEdge
+        diagnostics.clientDecodedFrames = latestClientStats?.decodedFrames
+        diagnostics.clientDroppedFrames = latestClientStats?.droppedFrames
+        diagnostics.clientEstimatedFramesPerSecond = latestClientStats?.estimatedFramesPerSecond
+        diagnostics.clientFrameWidth = latestClientStats?.frameWidth
+        diagnostics.clientFrameHeight = latestClientStats?.frameHeight
+        diagnostics.clientJitterMs = latestClientStats?.jitterMs
+        diagnostics.clientRoundTripTimeMs = latestClientStats?.roundTripTimeMs
+        diagnostics.clientBitrateBps = latestClientStats?.bitrateBps
         return diagnostics
     }
 
@@ -54,7 +67,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
             return CaptureConfiguration(
                 width: targetWidth,
                 height: targetHeight,
-                framesPerSecond: targetFramesPerSecond,
+                framesPerSecond: requestedFramesPerSecond,
                 displayFrame: currentDisplayFrame,
                 sourceDisplayWidth: sourceDisplayWidth ?? targetWidth,
                 sourceDisplayHeight: sourceDisplayHeight ?? targetHeight,
@@ -64,6 +77,9 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         }
 
         resetDiagnostics()
+        requestedFramesPerSecond = streamSettings.safeFramesPerSecond
+        effectiveFramesPerSecond = streamSettings.safeFramesPerSecond
+        submissionGate.updateTargetFramesPerSecond(streamSettings.safeFramesPerSecond)
 
         let content = try await SCShareableContent.excludingDesktopWindows(
             false,
@@ -83,7 +99,10 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         )
         configuration.width = captureSize.width
         configuration.height = captureSize.height
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(targetFramesPerSecond))
+        configuration.minimumFrameInterval = CMTime(
+            value: 1,
+            timescale: CMTimeScale(requestedFramesPerSecond)
+        )
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         configuration.queueDepth = 2
         configuration.showsCursor = true
@@ -102,13 +121,29 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         return CaptureConfiguration(
             width: captureSize.width,
             height: captureSize.height,
-            framesPerSecond: targetFramesPerSecond,
+            framesPerSecond: requestedFramesPerSecond,
             displayFrame: currentDisplayFrame,
             sourceDisplayWidth: display.width,
             sourceDisplayHeight: display.height,
             selectedStreamMaxLongEdge: streamSettings.maxLongEdge,
             selectedBitrateBps: streamSettings.safeMaxBitrateBps
         )
+    }
+
+    func updateStreamQuality(_ streamSettings: StreamQualitySettings) {
+        diagnosticsLock.lock()
+        requestedFramesPerSecond = streamSettings.safeFramesPerSecond
+        recomputeEffectiveFramesPerSecondLocked()
+        diagnosticsLock.unlock()
+    }
+
+    func applyClientStats(_ stats: StreamClientStats, localDroppedBackpressureFrames: Int) {
+        diagnosticsLock.lock()
+        latestClientStats = stats
+        let backpressureDelta = max(0, localDroppedBackpressureFrames - lastObservedBackpressureFrames)
+        lastObservedBackpressureFrames = localDroppedBackpressureFrames
+        recomputeEffectiveFramesPerSecondLocked(backpressureDelta: backpressureDelta)
+        diagnosticsLock.unlock()
     }
 
     func stop() async {
@@ -215,10 +250,15 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         droppedFrames = 0
         droppedIncompleteFrames = 0
         droppedPacingFrames = 0
+        requestedFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
+        effectiveFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
         lastFrameWidth = nil
         lastFrameHeight = nil
         lastPixelFormat = nil
+        lastObservedBackpressureFrames = 0
+        latestClientStats = nil
         submissionGate.reset()
+        submissionGate.updateTargetFramesPerSecond(StreamQualitySettings.defaultSettings.safeFramesPerSecond)
         sourceDisplayWidth = nil
         sourceDisplayHeight = nil
         selectedStreamMaxLongEdge = nil
@@ -279,6 +319,40 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         }
 
         return "\(pixelFormat)"
+    }
+
+    private func recomputeEffectiveFramesPerSecondLocked(backpressureDelta: Int = 0) {
+        var nextEffectiveFramesPerSecond = requestedFramesPerSecond
+
+        if requestedFramesPerSecond >= 60 {
+            if backpressureDelta > 1 ||
+                (latestClientStats?.estimatedFramesPerSecond ?? Double(requestedFramesPerSecond)) < 42 ||
+                (latestClientStats?.roundTripTimeMs ?? 0) > 120 ||
+                (latestClientStats?.jitterMs ?? 0) > 35 {
+                nextEffectiveFramesPerSecond = 45
+            }
+
+            if backpressureDelta > 4 ||
+                (latestClientStats?.estimatedFramesPerSecond ?? Double(requestedFramesPerSecond)) < 28 ||
+                (latestClientStats?.droppedFrames ?? 0) > 8 {
+                nextEffectiveFramesPerSecond = 30
+            }
+        } else if requestedFramesPerSecond >= 45 {
+            if backpressureDelta > 2 ||
+                (latestClientStats?.estimatedFramesPerSecond ?? Double(requestedFramesPerSecond)) < 30 ||
+                (latestClientStats?.roundTripTimeMs ?? 0) > 150 ||
+                (latestClientStats?.jitterMs ?? 0) > 45 {
+                nextEffectiveFramesPerSecond = 30
+            }
+        }
+
+        guard nextEffectiveFramesPerSecond != effectiveFramesPerSecond else {
+            return
+        }
+
+        effectiveFramesPerSecond = nextEffectiveFramesPerSecond
+        submissionGate.updateTargetFramesPerSecond(nextEffectiveFramesPerSecond)
+        print("macvm media: adjusted effective fps to \(nextEffectiveFramesPerSecond) (requested \(requestedFramesPerSecond))")
     }
 }
 
