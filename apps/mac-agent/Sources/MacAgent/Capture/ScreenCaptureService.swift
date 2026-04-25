@@ -4,6 +4,8 @@ import CoreGraphics
 import Foundation
 import ScreenCaptureKit
 
+private let capturePixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+
 final class ScreenCaptureService: NSObject, SCStreamOutput {
     var onFrame: ((CMSampleBuffer) -> Void)?
 
@@ -11,6 +13,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
     private let outputQueue = DispatchQueue(label: "macvm.capture.output")
     private var captureFrames = 0
     private var completeFrames = 0
+    private var configuredStreamFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
     private var submittedFrames = 0
     private var droppedFrames = 0
     private var droppedIncompleteFrames = 0
@@ -28,6 +31,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
     private var sourceDisplayHeight: Int?
     private var sourceDisplayWidth: Int?
     private var stream: SCStream?
+    private var streamConfiguration: SCStreamConfiguration?
     private var targetHeight = 0
     private var targetWidth = 0
 
@@ -103,7 +107,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
             value: 1,
             timescale: CMTimeScale(requestedFramesPerSecond)
         )
-        configuration.pixelFormat = kCVPixelFormatType_32BGRA
+        configuration.pixelFormat = capturePixelFormat
         configuration.queueDepth = 2
         configuration.showsCursor = true
 
@@ -111,6 +115,8 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         try nextStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: outputQueue)
         try await nextStream.startCapture()
         stream = nextStream
+        streamConfiguration = configuration
+        configuredStreamFramesPerSecond = requestedFramesPerSecond
         targetWidth = captureSize.width
         targetHeight = captureSize.height
         currentDisplayFrame = CGDisplayBounds(CGDirectDisplayID(display.displayID))
@@ -134,7 +140,9 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         diagnosticsLock.lock()
         requestedFramesPerSecond = streamSettings.safeFramesPerSecond
         recomputeEffectiveFramesPerSecondLocked()
+        let update = pendingStreamConfigurationUpdateLocked()
         diagnosticsLock.unlock()
+        applyStreamConfigurationUpdate(update)
     }
 
     func applyClientStats(_ stats: StreamClientStats, localDroppedBackpressureFrames: Int) {
@@ -143,7 +151,9 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         let backpressureDelta = max(0, localDroppedBackpressureFrames - lastObservedBackpressureFrames)
         lastObservedBackpressureFrames = localDroppedBackpressureFrames
         recomputeEffectiveFramesPerSecondLocked(backpressureDelta: backpressureDelta)
+        let update = pendingStreamConfigurationUpdateLocked()
         diagnosticsLock.unlock()
+        applyStreamConfigurationUpdate(update)
     }
 
     func stop() async {
@@ -153,6 +163,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
 
         try? await stream.stopCapture()
         self.stream = nil
+        streamConfiguration = nil
     }
 
     func stream(
@@ -244,6 +255,7 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         droppedFrames = 0
         droppedIncompleteFrames = 0
         droppedPacingFrames = 0
+        configuredStreamFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
         requestedFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
         effectiveFramesPerSecond = StreamQualitySettings.defaultSettings.safeFramesPerSecond
         lastFrameWidth = nil
@@ -257,6 +269,38 @@ final class ScreenCaptureService: NSObject, SCStreamOutput {
         sourceDisplayHeight = nil
         selectedStreamMaxLongEdge = nil
         diagnosticsLock.unlock()
+    }
+
+    private func pendingStreamConfigurationUpdateLocked() -> (stream: SCStream, configuration: SCStreamConfiguration, framesPerSecond: Int)? {
+        guard
+            effectiveFramesPerSecond != configuredStreamFramesPerSecond,
+            let stream,
+            let streamConfiguration
+        else {
+            return nil
+        }
+
+        streamConfiguration.minimumFrameInterval = CMTime(
+            value: 1,
+            timescale: CMTimeScale(effectiveFramesPerSecond)
+        )
+        configuredStreamFramesPerSecond = effectiveFramesPerSecond
+        return (stream, streamConfiguration, effectiveFramesPerSecond)
+    }
+
+    private func applyStreamConfigurationUpdate(_ update: (stream: SCStream, configuration: SCStreamConfiguration, framesPerSecond: Int)?) {
+        guard let update else {
+            return
+        }
+
+        Task {
+            do {
+                try await update.stream.updateConfiguration(update.configuration)
+                print("macvm media: updated ScreenCaptureKit minimum frame interval to \(update.framesPerSecond) fps")
+            } catch {
+                print("macvm media: failed to update ScreenCaptureKit frame interval: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func shouldSubmitFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {

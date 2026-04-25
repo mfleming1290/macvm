@@ -13,6 +13,7 @@ final class WebRTCSession: NSObject {
     private let stateLock = NSLock()
     private var iceConnectionState = "new"
     private var localCandidates: [IceCandidate] = []
+    private var captureConfiguration: CaptureConfiguration?
     private var selectedBitrateBps = StreamQualitySettings.defaultSettings.safeMaxBitrateBps
     private var sender: LKRTCRtpSender?
     private var signalingState = "new"
@@ -99,6 +100,7 @@ final class WebRTCSession: NSObject {
     func createAnswer(for offer: SessionDescription, captureConfiguration: CaptureConfiguration) async throws -> SessionDescription {
         let remoteDescription = LKRTCSessionDescription(type: .offer, sdp: offer.sdp)
         try await setRemoteDescription(remoteDescription)
+        self.captureConfiguration = captureConfiguration
         selectedBitrateBps = captureConfiguration.selectedBitrateBps
         inputController.update(captureConfiguration: captureConfiguration)
         configureVideoSource(captureConfiguration)
@@ -187,6 +189,13 @@ final class WebRTCSession: NSObject {
     private func handleStreamQualityUpdate(_ settings: StreamQualitySettings) {
         onStreamQualityUpdate(settings)
         selectedBitrateBps = settings.safeMaxBitrateBps
+        if let captureConfiguration {
+            videoSource.adaptOutputFormat(
+                toWidth: Int32(captureConfiguration.width),
+                height: Int32(captureConfiguration.height),
+                fps: Int32(settings.safeFramesPerSecond)
+            )
+        }
         applySenderEncoding(bitrateBps: settings.safeMaxBitrateBps, framesPerSecond: settings.safeFramesPerSecond)
         print("macvm: updated stream bitrate to \(settings.safeMaxBitrateBps) bps at \(settings.safeFramesPerSecond) fps")
     }

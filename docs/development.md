@@ -132,7 +132,7 @@ The browser uses an explicit contained-frame helper instead of relying on passiv
 
 ## Video Quality Tuning
 
-The Mac agent keeps the same WebRTC sender path, but capture output is capped to a 1920-pixel long edge when the display is larger. The sender applies the current runtime bitrate/FPS settings, uses high network priority, and keeps a screen-stream-friendly degradation preference.
+The Mac agent keeps the same WebRTC sender path, but ScreenCaptureKit produces video-range NV12 (`420v`) frames and capture output is capped to a 1920-pixel long edge when the display is larger. The sender applies the current runtime bitrate/FPS settings, uses high network priority, and keeps a screen-stream-friendly degradation preference.
 
 The intent is to reduce encoder pressure from very large Retina frames while giving motion more bitrate headroom. This should reduce smearing during fast desktop changes without introducing an alternate transport or buffering strategy. Browser bitrate changes are committed on release/blur instead of on every slider movement so the active session does not churn sender parameters continuously.
 
