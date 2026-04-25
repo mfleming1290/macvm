@@ -191,10 +191,13 @@ The browser UI exposes manual send/fetch actions plus an opt-in auto-sync toggle
 Run these before considering the MVP healthy:
 
 ```sh
+npm test
 npm run build
 cd apps/mac-agent && swift test
 npm run build:agent-app
 ```
+
+`npm test` runs the TypeScript protocol parity tests against the shared JSON fixtures in `protocol-fixtures/`. The Swift test suite also reads those fixtures so protocol drift between `packages/protocol` and the mac-agent mirror fails early.
 
 Manual verification requires a Mac with Screen Recording permission granted:
 

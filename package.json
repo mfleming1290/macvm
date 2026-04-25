@@ -9,6 +9,7 @@
     "build:agent-app": "apps/mac-agent/scripts/build-dev-app.sh",
     "build": "npm run build --workspace @macvm/protocol && npm run build --workspace @macvm/web-client",
     "dev:web": "npm run dev --workspace @macvm/web-client",
+    "test": "npm run test --workspace @macvm/protocol",
     "typecheck": "npm run typecheck --workspace @macvm/protocol && npm run typecheck --workspace @macvm/web-client"
   },
   "devDependencies": {

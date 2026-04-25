@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "offer": {
+    "type": "offer",
+    "sdp": "v=0"
+  },
+  "stream": {
+    "maxBitrateBps": 20000000,
+    "framesPerSecond": 30,
+    "resolutionPreset": "1080p"
+  }
+}

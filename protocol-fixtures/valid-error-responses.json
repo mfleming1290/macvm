@@ -1,0 +1,72 @@
+[
+  {
+    "version": 1,
+    "error": {
+      "code": "capture_failed",
+      "message": "Screen capture failed."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "invalid_ice_candidate",
+      "message": "The ICE candidate is missing or invalid."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "invalid_input",
+      "message": "The input control message is missing or invalid."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "invalid_json",
+      "message": "The request body is not valid JSON for this endpoint."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "invalid_offer",
+      "message": "The session offer is missing or invalid."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "negotiation_failed",
+      "message": "WebRTC negotiation failed."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "not_found",
+      "message": "The requested endpoint does not exist."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "permission_missing",
+      "message": "Screen Recording permission is required before starting a stream."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "session_not_found",
+      "message": "The requested session is not active."
+    }
+  },
+  {
+    "version": 1,
+    "error": {
+      "code": "unsupported_protocol_version",
+      "message": "Unsupported protocol version."
+    }
+  }
+]

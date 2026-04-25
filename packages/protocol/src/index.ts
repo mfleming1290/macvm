@@ -277,7 +277,7 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
 
   return (
     value.version === PROTOCOL_VERSION &&
-    typeof value.status === "string" &&
+    isAgentHealthStatus(value.status) &&
     typeof value.activeSession === "boolean" &&
     typeof value.screenRecordingAllowed === "boolean" &&
     typeof value.accessibilityAllowed === "boolean" &&
@@ -319,7 +319,7 @@ export function isErrorResponse(value: unknown): value is ErrorResponse {
     isRecord(value) &&
     value.version === PROTOCOL_VERSION &&
     isRecord(value.error) &&
-    typeof value.error.code === "string" &&
+    isAgentErrorCode(value.error.code) &&
     typeof value.error.message === "string"
   );
 }
@@ -453,7 +453,7 @@ function isControlDiagnostics(value: unknown): value is ControlDiagnostics {
     (typeof value.lastClipboardTextLength === "number" || value.lastClipboardTextLength === null) &&
     typeof value.pressedKeys === "number" &&
     typeof value.pressedButtons === "number" &&
-    (typeof value.lastMessageType === "string" || value.lastMessageType === null) &&
+    (isControlMessageType(value.lastMessageType) || value.lastMessageType === null) &&
     (typeof value.lastMappedX === "number" || value.lastMappedX === null) &&
     (typeof value.lastMappedY === "number" || value.lastMappedY === null) &&
     (typeof value.lastError === "string" || value.lastError === null)
@@ -526,6 +526,48 @@ function isClipboardErrorCode(value: unknown): value is ClipboardErrorCode {
     value === "non_text" ||
     value === "read_failed" ||
     value === "write_failed"
+  );
+}
+
+function isAgentErrorCode(value: unknown): value is AgentErrorCode {
+  return (
+    value === "capture_failed" ||
+    value === "invalid_ice_candidate" ||
+    value === "invalid_input" ||
+    value === "invalid_json" ||
+    value === "invalid_offer" ||
+    value === "negotiation_failed" ||
+    value === "not_found" ||
+    value === "permission_missing" ||
+    value === "session_not_found" ||
+    value === "unsupported_protocol_version"
+  );
+}
+
+function isAgentHealthStatus(value: unknown): value is AgentHealthStatus {
+  return (
+    value === "ok" ||
+    value === "permissionMissing" ||
+    value === "accessibilityMissing" ||
+    value === "captureFailed" ||
+    value === "negotiationFailed" ||
+    value === "serverFailed"
+  );
+}
+
+function isControlMessageType(value: unknown): value is ControlMessageType {
+  return (
+    value === "input.mouse.move" ||
+    value === "input.mouse.button" ||
+    value === "input.mouse.wheel" ||
+    value === "input.keyboard.key" ||
+    value === "input.reset" ||
+    value === "stream.quality.update" ||
+    value === "clipboard.set" ||
+    value === "clipboard.get" ||
+    value === "clipboard.value" ||
+    value === "clipboard.error" ||
+    value === "stream.stats.report"
   );
 }
 

@@ -1,0 +1,12 @@
+{
+  "version": 99,
+  "offer": {
+    "type": "answer",
+    "sdp": ""
+  },
+  "stream": {
+    "maxBitrateBps": 20000000,
+    "framesPerSecond": 24,
+    "resolutionPreset": "4k"
+  }
+}

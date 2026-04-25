@@ -32,6 +32,7 @@ apps/
   web-client/     Vite React browser client and normalized input capture
 packages/
   protocol/       Shared TypeScript protocol contracts for signaling and control messages
+protocol-fixtures/ Shared JSON fixtures used by TS and Swift protocol parity tests
 docs/
   development.md
   permissions.md
@@ -124,6 +125,7 @@ This MVP is local-network development infrastructure. Do not expose it to the pu
 ## Verify
 
 ```sh
+npm test
 npm run build
 cd apps/mac-agent && swift test
 npm run build:agent-app

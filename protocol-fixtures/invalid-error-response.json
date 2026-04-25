@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "error": {
+    "code": "unknown_error",
+    "message": "This code is not part of the protocol."
+  }
+}

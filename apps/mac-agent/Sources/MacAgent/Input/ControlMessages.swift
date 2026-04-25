@@ -188,19 +188,30 @@ enum ControlProtocol {
         case "input.keyboard.key":
             return .keyboardKey(try JSONDecoder().decode(KeyboardKeyControlMessage.self, from: data))
         case "input.reset":
-            return .reset(try JSONDecoder().decode(InputResetControlMessage.self, from: data))
+            let message = try JSONDecoder().decode(InputResetControlMessage.self, from: data)
+            try validateResetReason(message.reason)
+            return .reset(message)
         case "stream.quality.update":
             let message = try JSONDecoder().decode(StreamQualityControlMessage.self, from: data)
             try validateQuality(message.settings)
             return .streamQuality(message)
         case "clipboard.set":
-            return .clipboardSet(try JSONDecoder().decode(ClipboardSetControlMessage.self, from: data))
+            let message = try JSONDecoder().decode(ClipboardSetControlMessage.self, from: data)
+            try validateClipboardSource(message.source)
+            return .clipboardSet(message)
         case "clipboard.get":
-            return .clipboardGet(try JSONDecoder().decode(ClipboardGetControlMessage.self, from: data))
+            let message = try JSONDecoder().decode(ClipboardGetControlMessage.self, from: data)
+            try validateClipboardSource(message.source)
+            return .clipboardGet(message)
         case "clipboard.value":
-            return .clipboardValue(try JSONDecoder().decode(ClipboardValueControlMessage.self, from: data))
+            let message = try JSONDecoder().decode(ClipboardValueControlMessage.self, from: data)
+            try validateClipboardSource(message.source)
+            return .clipboardValue(message)
         case "clipboard.error":
-            return .clipboardError(try JSONDecoder().decode(ClipboardErrorControlMessage.self, from: data))
+            let message = try JSONDecoder().decode(ClipboardErrorControlMessage.self, from: data)
+            try validateClipboardSource(message.source)
+            try validateClipboardErrorCode(message.code)
+            return .clipboardError(message)
         case "stream.stats.report":
             return .streamStatsReport(try JSONDecoder().decode(StreamStatsReportControlMessage.self, from: data))
         default:
@@ -227,6 +238,28 @@ enum ControlProtocol {
             throw ControlProtocolError.invalidQuality
         }
     }
+
+    private static func validateClipboardSource(_ source: String) throws {
+        guard source == "browser" || source == "agent" else {
+            throw ControlProtocolError.invalidClipboardSource
+        }
+    }
+
+    private static func validateClipboardErrorCode(_ code: String) throws {
+        guard code == "empty" || code == "non_text" || code == "read_failed" || code == "write_failed" else {
+            throw ControlProtocolError.invalidClipboardErrorCode
+        }
+    }
+
+    private static func validateResetReason(_ reason: String) throws {
+        guard reason == "blur" ||
+            reason == "disconnect" ||
+            reason == "reconnect" ||
+            reason == "visibilitychange" ||
+            reason == "manual" else {
+            throw ControlProtocolError.invalidResetReason
+        }
+    }
 }
 
 private struct ControlEnvelope: Codable {
@@ -235,17 +268,26 @@ private struct ControlEnvelope: Codable {
 }
 
 enum ControlProtocolError: LocalizedError {
+    case invalidClipboardErrorCode
+    case invalidClipboardSource
     case invalidQuality
     case invalidCoordinate
+    case invalidResetReason
     case unsupportedType(String)
     case unsupportedVersion
 
     var errorDescription: String? {
         switch self {
+        case .invalidClipboardErrorCode:
+            "Clipboard error message contains an unsupported error code."
+        case .invalidClipboardSource:
+            "Clipboard message contains an unsupported source."
         case .invalidQuality:
             "Stream quality message is outside the supported bitrate range."
         case .invalidCoordinate:
             "Control message contains coordinates outside 0...1."
+        case .invalidResetReason:
+            "Reset message contains an unsupported reason."
         case .unsupportedType(let type):
             "Unsupported control message type: \(type)."
         case .unsupportedVersion:

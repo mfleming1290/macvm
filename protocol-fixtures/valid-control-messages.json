@@ -1,0 +1,116 @@
+[
+  {
+    "version": 1,
+    "type": "input.mouse.move",
+    "sequence": 1,
+    "timestampMs": 1713926400000,
+    "x": 0.25,
+    "y": 0.75,
+    "buttons": ["left"]
+  },
+  {
+    "version": 1,
+    "type": "input.mouse.button",
+    "sequence": 2,
+    "timestampMs": 1713926400001,
+    "button": "right",
+    "action": "down",
+    "x": 0.5,
+    "y": 0.5,
+    "buttons": ["right"]
+  },
+  {
+    "version": 1,
+    "type": "input.mouse.wheel",
+    "sequence": 3,
+    "timestampMs": 1713926400002,
+    "deltaX": 0,
+    "deltaY": -120,
+    "x": 0.5,
+    "y": 0.5
+  },
+  {
+    "version": 1,
+    "type": "input.keyboard.key",
+    "sequence": 4,
+    "timestampMs": 1713926400003,
+    "action": "down",
+    "code": "KeyA",
+    "key": "a",
+    "modifiers": {
+      "shift": false,
+      "control": false,
+      "alt": false,
+      "meta": true
+    },
+    "repeat": false
+  },
+  {
+    "version": 1,
+    "type": "input.reset",
+    "sequence": 5,
+    "timestampMs": 1713926400004,
+    "reason": "blur"
+  },
+  {
+    "version": 1,
+    "type": "stream.quality.update",
+    "sequence": 6,
+    "timestampMs": 1713926400005,
+    "settings": {
+      "maxBitrateBps": 100000000,
+      "framesPerSecond": 60,
+      "resolutionPreset": "720p"
+    }
+  },
+  {
+    "version": 1,
+    "type": "clipboard.set",
+    "sequence": 7,
+    "timestampMs": 1713926400006,
+    "source": "browser",
+    "text": "hello from browser"
+  },
+  {
+    "version": 1,
+    "type": "clipboard.get",
+    "sequence": 8,
+    "timestampMs": 1713926400007,
+    "source": "browser"
+  },
+  {
+    "version": 1,
+    "type": "clipboard.value",
+    "sequence": 9,
+    "timestampMs": 1713926400008,
+    "source": "agent",
+    "replyToSequence": 8,
+    "text": "hello from mac"
+  },
+  {
+    "version": 1,
+    "type": "clipboard.error",
+    "sequence": 10,
+    "timestampMs": 1713926400009,
+    "source": "agent",
+    "replyToSequence": 8,
+    "code": "non_text",
+    "message": "The Mac clipboard does not currently contain plain text."
+  },
+  {
+    "version": 1,
+    "type": "stream.stats.report",
+    "sequence": 11,
+    "timestampMs": 1713926400010,
+    "stats": {
+      "decodedFrames": 840,
+      "droppedFrames": 12,
+      "estimatedFramesPerSecond": 29.4,
+      "frameWidth": 1280,
+      "frameHeight": 720,
+      "jitterMs": 8.5,
+      "roundTripTimeMs": 42,
+      "bitrateBps": 14500000
+    }
+  }
+]

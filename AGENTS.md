@@ -85,6 +85,7 @@ apps/
     public/
 packages/
   protocol/
+protocol-fixtures/
 docs/
   protocol.md
   permissions.md
@@ -96,6 +97,7 @@ Logical boundaries:
 - `apps/mac-agent/` owns capture, media encoding/frame delivery, WebRTC peer setup, local HTTP signaling, session lifecycle, permission checks, input decoding/injection, and diagnostics.
 - `apps/web-client/` owns session join UI, browser-side WebRTC setup, remote video rendering, normalized local input capture, connection state, and diagnostics.
 - `packages/protocol/` owns browser-facing protocol definitions. Do not duplicate message contracts ad hoc.
+- `protocol-fixtures/` owns shared JSON protocol fixtures used by both TypeScript and Swift parity tests.
 
 ## Core System Model
 
@@ -212,6 +214,7 @@ Rules:
 First priorities:
 
 - protocol serialization/deserialization
+- TypeScript/Swift protocol parity against shared JSON fixtures
 - coordinate mapping and control-message decoding
 - CORS/preflight compatibility from the web dev-server origin
 - session state transitions

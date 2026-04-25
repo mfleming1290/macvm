@@ -1,0 +1,5 @@
+{
+  "maxBitrateBps": 20000000,
+  "framesPerSecond": 45,
+  "resolutionPreset": "1440p"
+}
